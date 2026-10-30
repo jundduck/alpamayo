@@ -54,11 +54,6 @@
   header.hero{padding:64px 0 44px;text-align:center;border-bottom:1px solid var(--line);}
   .logo-chip{width:88px;height:88px;border-radius:20px;background:#fff;padding:10px;margin:0 auto 20px;box-shadow:var(--shadow);}
   .logo-chip img{width:100%;height:100%;object-fit:contain;display:block;}
-  .badge-unofficial{
-    display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
-    color:var(--amber);background:var(--amber-bg);border:1px solid rgba(242,177,52,0.35);
-    border-radius:999px;padding:5px 14px;margin-bottom:20px;
-  }
   h1.title{font-size:clamp(32px,5.4vw,46px);font-weight:700;margin:0;letter-spacing:-0.01em;}
   p.subtitle{font-size:18px;color:var(--muted);max-width:620px;margin:16px auto 0;}
   .byline{margin-top:20px;font-size:14px;color:var(--faint);}
@@ -192,13 +187,12 @@
 <header class="hero">
   <div class="wrap">
     <div class="logo-chip"><img src="assets/yax-logo.png" alt="yax logo"></div>
-    <div class="badge-unofficial">&#9888; Unofficial walkthrough &middot; not an NVIDIA page</div>
     <h1 class="title">Inside Alpamayo&#8209;R1</h1>
     <p class="subtitle">
       A code&#8209;grounded tour of NVIDIA's open vision&#8209;language&#8209;action model for autonomous
       driving &mdash; four cameras in, a plain&#8209;English reason and a 6.4&#8209;second trajectory out.
     </p>
-    <div class="byline">Compiled by <b>yax</b> for internal study &middot; site source at <a href="https://github.com/jundduck/alpamayo" target="_blank" rel="noopener">jundduck/alpamayo</a></div>
+    <div class="byline">Study notes by <b>yax</b> &middot; architecture + real inference, no training &middot; site source at <a href="https://github.com/jundduck/alpamayo" target="_blank" rel="noopener">jundduck/alpamayo</a></div>
     <div class="link-row">
       <a class="link-pill" href="https://arxiv.org/abs/2511.00088" target="_blank" rel="noopener"><span class="k">Paper</span>arXiv:2511.00088</a>
       <a class="link-pill" href="https://huggingface.co/nvidia/Alpamayo-R1-10B" target="_blank" rel="noopener"><span class="k">Model</span>Alpamayo&#8209;R1&#8209;10B</a>
@@ -222,6 +216,8 @@
       state&#8209;of&#8209;the&#8209;art results on reasoning, trajectory generation, alignment, safety and
       latency &mdash; via open&#8209;loop metrics, closed&#8209;loop simulation and real&#8209;vehicle tests.
       The rest of this page is not that evaluation; it's what the <em>released code</em> does, read directly.
+      <strong>Scope:</strong> this page covers reading the architecture closely and running real inference
+      with the released checkpoint &mdash; no training or fine&#8209;tuning was done here.
     </p>
     <div class="flag">
       <b>Worth knowing:</b> the repo's own README describes the backbone as
@@ -244,21 +240,32 @@
 
     <div class="diagram-frame">
       <span class="diagram-counter"><span id="stageIdx">1</span> / 8</span>
-      <svg id="methodSvg" viewBox="0 0 1220 420" width="100%" role="img" aria-label="Alpamayo-R1 architecture, revealed stage by stage">
+      <svg id="methodSvg" viewBox="0 0 1220 360" width="100%" role="img" aria-label="Alpamayo-R1 architecture, revealed stage by stage">
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--faint)"/></marker>
           <marker id="arrowAccent" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--accent)"/></marker>
           <marker id="arrowAmber" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--amber)"/></marker>
           <marker id="arrowRose" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--rose)"/></marker>
           <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--green)"/></marker>
+          <symbol id="roadScene" viewBox="0 0 62 42">
+            <rect x="0.5" y="0.5" width="61" height="41" rx="5" fill="#0F1620"/>
+            <rect x="0.5" y="0.5" width="61" height="18" rx="5" fill="#16243A"/>
+            <line x1="0.5" y1="18.5" x2="61.5" y2="18.5" stroke="#2A3B55" stroke-width="1"/>
+            <polygon points="24,18.5 8,41.5 54,41.5 38,18.5" fill="#1B2430"/>
+            <line x1="31" y1="21" x2="31" y2="41.5" stroke="#5B6472" stroke-width="1" stroke-dasharray="2 2"/>
+            <polygon points="5,18.5 1,7 9,7" fill="#20331F"/>
+            <polygon points="57,18.5 53,5 61,5" fill="#20331F"/>
+            <rect x="26" y="31" width="10" height="7" rx="1.5" fill="var(--accent)"/>
+            <rect x="0.5" y="0.5" width="61" height="41" rx="5" fill="none" stroke="var(--accent)" stroke-width="2"/>
+          </symbol>
         </defs>
 
         <!-- stage 1: inputs -->
         <g class="reveal" data-stage="1">
-          <g fill="none" stroke="var(--accent)" stroke-width="2">
-            <rect x="20" y="20" width="62" height="42" rx="5"/><rect x="92" y="20" width="62" height="42" rx="5"/>
-            <rect x="20" y="70" width="62" height="42" rx="5"/><rect x="92" y="70" width="62" height="42" rx="5"/>
-          </g>
+          <use href="#roadScene" x="20" y="20" width="62" height="42"/>
+          <use href="#roadScene" x="92" y="20" width="62" height="42"/>
+          <use href="#roadScene" x="20" y="70" width="62" height="42"/>
+          <use href="#roadScene" x="92" y="70" width="62" height="42"/>
           <circle cx="40" cy="150" r="14" fill="none" stroke="var(--faint)" stroke-width="2"/>
           <line x1="40" y1="150" x2="40" y2="140" stroke="var(--faint)" stroke-width="2"/>
           <line x1="40" y1="150" x2="47" y2="153" stroke="var(--faint)" stroke-width="2"/>
@@ -304,6 +311,8 @@
           <ellipse cx="520" cy="160" rx="50" ry="30" fill="var(--amber-bg)" stroke="var(--amber)" stroke-width="1.8"/>
           <text x="520" y="156" text-anchor="middle" font-size="13" font-family="IBM Plex Mono" fill="var(--amber)">KV</text>
           <text x="520" y="171" text-anchor="middle" font-size="9.5" fill="var(--amber)">cache</text>
+          <text x="520" y="206" text-anchor="middle" font-size="9.5" font-style="italic" fill="var(--faint)">same 36 layers</text>
+          <text x="520" y="218" text-anchor="middle" font-size="9.5" font-style="italic" fill="var(--faint)">&#8594; cache is reusable</text>
         </g>
 
         <!-- stage 5: action expert -->
@@ -325,6 +334,7 @@
           <text x="768" y="152" text-anchor="middle" font-size="13" font-family="IBM Plex Mono" fill="var(--faint)">&times;36</text>
           <text x="731" y="192" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ink)">Action Expert</text>
           <text x="731" y="210" text-anchor="middle" font-size="10.5" font-family="IBM Plex Mono" fill="var(--faint)">2.3B &middot; non&#8209;causal</text>
+          <text x="731" y="225" text-anchor="middle" font-size="9.5" font-style="italic" fill="var(--faint)">64 waypoints attend to each other</text>
         </g>
 
         <!-- stage 6: action decode -->
