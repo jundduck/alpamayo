@@ -12,7 +12,7 @@
     return [minX - mx, maxX + mx, minY - my, maxY + my];
   }
 
-  function drawScenario(canvas, s, animate){
+  function drawScenario(canvas, s, animate, onDone){
     var dpr = window.devicePixelRatio || 1;
     var w = canvas.clientWidth, h = canvas.clientHeight;
     canvas.width = w * dpr; canvas.height = h * dpr;
@@ -51,8 +51,15 @@
       var frac = Math.min((ts - start) / duration, 1);
       render(frac);
       if (frac < 1) requestAnimationFrame(step);
+      else if (onDone) onDone();
     }
     requestAnimationFrame(step);
+  }
+
+  function loopScenario(canvas, s){
+    drawScenario(canvas, s, true, function(){
+      setTimeout(function(){ loopScenario(canvas, s); }, 900);
+    });
   }
 
   SCENARIOS.forEach(function(s){
@@ -69,7 +76,7 @@
     reason.textContent = s.reasoning;
     card.appendChild(reason);
     grid.appendChild(card);
-    requestAnimationFrame(function(){ drawScenario(canvas, s, false); });
+    requestAnimationFrame(function(){ loopScenario(canvas, s); });
     card.addEventListener('click', function(){ drawScenario(canvas, s, true); });
   });
 })();

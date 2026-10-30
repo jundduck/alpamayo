@@ -88,26 +88,22 @@
   }
   .flag b{color:var(--amber);}
 
-  /* ---- method: persistent flow rail ---- */
-  .flow-rail{
-    display:flex;gap:18px;overflow-x:auto;padding:10px 4px 22px;margin-top:30px;
-    scroll-snap-type:x proximity;scrollbar-width:thin;
+  /* ---- method: single cumulative diagram ---- */
+  .diagram-frame{
+    margin-top:30px;background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:18px 18px 0;position:relative;overflow-x:auto;
   }
-  .stage-card{
-    scroll-snap-align:center;flex:0 0 250px;background:var(--surface);
-    border:1px solid var(--line);border-radius:14px;padding:16px 16px 18px;
-    transition:border-color .25s, transform .25s, box-shadow .25s;position:relative;
+  .diagram-counter{
+    position:absolute;top:16px;right:18px;font-family:"IBM Plex Mono";font-size:12px;color:var(--faint);
+    border:1px solid var(--line);border-radius:6px;padding:3px 10px;background:var(--surface);
   }
-  .stage-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent), var(--shadow);transform:translateY(-3px);}
-  .stage-card .num{
-    font-family:"IBM Plex Mono";font-size:11px;font-weight:600;color:var(--faint);
-    background:var(--surface-2);border-radius:5px;padding:2px 7px;display:inline-block;margin-bottom:10px;
-  }
-  .stage-card.active .num{color:var(--accent);background:var(--accent-bg);}
-  .stage-card svg{width:100%;height:120px;display:block;margin-bottom:10px;}
-  .stage-card h4{font-size:15px;margin:0 0 6px;font-weight:700;}
-  .stage-card p{font-size:12.8px;color:var(--muted);margin:0;line-height:1.5;}
-  .stage-arrow{flex:0 0 20px;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:16px;align-self:center;}
+  #methodSvg{min-width:760px;}
+  #methodSvg text{font-family:"Source Sans 3",sans-serif;}
+  #methodSvg .reveal{opacity:0;transform:translateY(6px);transition:opacity .45s ease,transform .45s ease;}
+  #methodSvg .reveal.revealed{opacity:1;transform:translateY(0);}
+  .diagram-caption{padding:16px 4px 20px;text-align:center;}
+  .diagram-caption .t{font-weight:700;font-size:16px;}
+  .diagram-caption .d{color:var(--muted);font-size:13.5px;margin-top:6px;max-width:640px;margin-inline:auto;}
 
   .flow-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .ctl-btn{
@@ -145,6 +141,8 @@
   .bound-row .v{font-family:"IBM Plex Mono";color:var(--ink);}
 
   /* scenarios gallery */
+  .demo-video-wrap{margin-top:24px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#000;}
+  .demo-video-wrap video{display:block;width:100%;height:auto;}
   .scenario-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;margin-top:28px;}
   .scenario-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:border-color .2s;}
   .scenario-card:hover{border-color:var(--accent);}
@@ -237,150 +235,136 @@
 <section id="method">
   <div class="wide">
     <span class="eyebrow">Method</span>
-    <h2 class="h">One inference call, eight stages</h2>
+    <h2 class="h">One inference call, one diagram</h2>
     <p class="lead">
       <code>AlpamayoR1.sample_trajectories_from_data_with_vlm_rollout()</code> is the single method both
-      <code>test_inference.py</code> and this fork's <code>demo_video.py</code> call. Step through it with
-      the controls below &mdash; every stage you've seen stays visible.
+      <code>test_inference.py</code> and this fork's <code>demo_video.py</code> call. Step through it &mdash;
+      each stage adds a piece to the <em>same</em> diagram until the full pipeline is on screen.
     </p>
 
-    <div class="flow-rail" id="flowRail">
+    <div class="diagram-frame">
+      <span class="diagram-counter"><span id="stageIdx">1</span> / 8</span>
+      <svg id="methodSvg" viewBox="0 0 1220 420" width="100%" role="img" aria-label="Alpamayo-R1 architecture, revealed stage by stage">
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--faint)"/></marker>
+          <marker id="arrowAccent" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--accent)"/></marker>
+          <marker id="arrowAmber" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--amber)"/></marker>
+          <marker id="arrowRose" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--rose)"/></marker>
+          <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--green)"/></marker>
+        </defs>
 
-      <div class="stage-card" data-i="0">
-        <span class="num">1 / 8</span>
-        <svg viewBox="0 0 240 150"><g fill="none" stroke="var(--accent)" stroke-width="2.4">
-          <rect x="26" y="16" width="86" height="54" rx="6"/><rect x="128" y="16" width="86" height="54" rx="6"/>
-          <rect x="26" y="78" width="86" height="54" rx="6"/><rect x="128" y="78" width="86" height="54" rx="6"/>
+        <!-- stage 1: inputs -->
+        <g class="reveal" data-stage="1">
+          <g fill="none" stroke="var(--accent)" stroke-width="2">
+            <rect x="20" y="20" width="62" height="42" rx="5"/><rect x="92" y="20" width="62" height="42" rx="5"/>
+            <rect x="20" y="70" width="62" height="42" rx="5"/><rect x="92" y="70" width="62" height="42" rx="5"/>
+          </g>
+          <circle cx="40" cy="150" r="14" fill="none" stroke="var(--faint)" stroke-width="2"/>
+          <line x1="40" y1="150" x2="40" y2="140" stroke="var(--faint)" stroke-width="2"/>
+          <line x1="40" y1="150" x2="47" y2="153" stroke="var(--faint)" stroke-width="2"/>
+          <text x="62" y="155" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono">1.6s history</text>
+          <text x="20" y="200" font-size="13" font-weight="700" fill="var(--ink)">Posed Multi&#8209;camera</text>
+          <text x="20" y="218" font-size="13" font-weight="700" fill="var(--ink)">+ History Input</text>
         </g>
-        <circle cx="180" cy="122" r="18" fill="none" stroke="var(--faint)" stroke-width="2.2"/>
-        <line x1="180" y1="122" x2="180" y2="109" stroke="var(--faint)" stroke-width="2.2"/>
-        <line x1="180" y1="122" x2="190" y2="125" stroke="var(--faint)" stroke-width="2.2"/>
-        <text x="60" y="128" font-size="12" fill="var(--muted)" font-family="IBM Plex Mono">1.6s hist.</text></svg>
-        <h4>Inputs</h4>
-        <p>4 cameras &times; 4 history frames (16 images) plus 1.6s of ego motion, rotated into the ego&#8209;local frame at t0.</p>
-      </div>
-      <div class="stage-arrow">&#8594;</div>
 
-      <div class="stage-card" data-i="1">
-        <span class="num">2 / 8</span>
-        <svg viewBox="0 0 240 150">
-          <g fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.8">
-            <rect x="14" y="60" width="30" height="30" rx="5"/><rect x="50" y="60" width="30" height="30" rx="5"/><rect x="86" y="60" width="30" height="30" rx="5"/>
-          </g>
-          <text x="29" y="80" font-size="10" text-anchor="middle" fill="#BFE0FF">img</text>
-          <text x="65" y="80" font-size="10" text-anchor="middle" fill="#BFE0FF">img</text>
-          <text x="101" y="80" font-size="10" text-anchor="middle" fill="#BFE0FF">&hellip;</text>
-          <path d="M122 75 H148" stroke="var(--faint)" stroke-width="1.8" marker-end="url(#ah1)"/>
-          <rect x="154" y="36" width="76" height="78" rx="10" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.6"/>
-          <text x="192" y="68" font-size="10.5" text-anchor="middle" font-family="IBM Plex Mono" fill="var(--ink)">&#8249;cot</text>
-          <text x="192" y="82" font-size="10.5" text-anchor="middle" font-family="IBM Plex Mono" fill="var(--ink)">start&#8250;</text>
-          <text x="192" y="100" font-size="9" text-anchor="middle" fill="var(--muted)">continue&#8230;</text>
-          <defs><marker id="ah1" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--faint)"/></marker></defs>
-        </svg>
-        <h4>Prompt</h4>
-        <p>16 image tokens + 48 history&#8209;placeholder tokens; the assistant turn is pre&#8209;seeded so generation must continue it.</p>
-      </div>
-      <div class="stage-arrow">&#8594;</div>
-
-      <div class="stage-card" data-i="2">
-        <span class="num">3 / 8</span>
-        <svg viewBox="0 0 240 150">
-          <path d="M16 110 Q70 30 120 76 T220 50" fill="none" stroke="var(--faint)" stroke-width="2.4"/>
-          <path d="M150 80 V100" stroke="var(--faint)" stroke-width="1.8" marker-end="url(#ah2)"/>
+        <!-- stage 2: backbone -->
+        <g class="reveal" data-stage="2">
+          <path d="M160 65 H230" stroke="var(--faint)" stroke-width="2" marker-end="url(#arrow)"/>
+          <rect x="236" y="16" width="190" height="210" rx="12" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="1.6"/>
           <g>
-            <rect x="60" y="112" width="18" height="24" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.4"/>
-            <rect x="82" y="112" width="18" height="24" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.4"/>
-            <rect x="104" y="112" width="18" height="24" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.4"/>
-            <rect x="126" y="112" width="18" height="24" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.4"/>
-            <rect x="148" y="112" width="18" height="24" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.4"/>
+            <rect x="256" y="36" width="70" height="16" rx="3" fill="var(--accent-bg)" stroke="var(--accent)"/>
+            <rect x="332" y="36" width="70" height="16" rx="3" fill="var(--accent-bg)" stroke="var(--accent)"/>
+            <rect x="256" y="60" width="70" height="16" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="332" y="60" width="70" height="16" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="256" y="84" width="70" height="16" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="332" y="84" width="70" height="16" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="256" y="108" width="70" height="16" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="332" y="108" width="70" height="16" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="256" y="132" width="70" height="16" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="332" y="132" width="70" height="16" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
           </g>
-          <text x="105" y="130" font-size="10.5" text-anchor="middle" fill="var(--muted)" font-family="IBM Plex Mono">&times;48</text>
-          <defs><marker id="ah2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--faint)"/></marker></defs>
-        </svg>
-        <h4>History tokens</h4>
-        <p>16 steps &times; 3 dims of ego&#8209;local motion delta&#8209;encoded into 48 integers, scattered into the placeholder slots.</p>
-      </div>
-      <div class="stage-arrow">&#8594;</div>
+          <text x="368" y="160" text-anchor="middle" font-size="13" font-family="IBM Plex Mono" fill="var(--faint)">&times;36</text>
+          <text x="331" y="192" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ink)">VLM Backbone</text>
+          <text x="331" y="210" text-anchor="middle" font-size="10.5" font-family="IBM Plex Mono" fill="var(--faint)">Qwen3&#8209;VL&#8209;8B &middot; causal</text>
+        </g>
 
-      <div class="stage-card" data-i="3">
-        <span class="num">4 / 8</span>
-        <svg viewBox="0 0 240 150">
+        <!-- stage 3: reasoning output -->
+        <g class="reveal" data-stage="3">
+          <path d="M402 36 Q450 20 470 20" fill="none" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrowAccent)"/>
+          <rect x="476" y="4" width="150" height="54" rx="10" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="1.6"/>
+          <rect x="490" y="16" width="100" height="7" rx="2" fill="var(--accent-bg)"/>
+          <rect x="490" y="28" width="80" height="7" rx="2" fill="var(--accent-bg)"/>
+          <rect x="490" y="40" width="110" height="7" rx="2" fill="var(--accent-bg)"/>
+          <text x="551" y="-6" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)" transform="translate(0,78)">Chain&#8209;of&#8209;Causation</text>
+        </g>
+
+        <!-- stage 4: cache handoff -->
+        <g class="reveal" data-stage="4">
+          <path d="M402 160 Q450 160 470 160" fill="none" stroke="var(--amber)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arrowAmber)"/>
+          <ellipse cx="520" cy="160" rx="50" ry="30" fill="var(--amber-bg)" stroke="var(--amber)" stroke-width="1.8"/>
+          <text x="520" y="156" text-anchor="middle" font-size="13" font-family="IBM Plex Mono" fill="var(--amber)">KV</text>
+          <text x="520" y="171" text-anchor="middle" font-size="9.5" fill="var(--amber)">cache</text>
+        </g>
+
+        <!-- stage 5: action expert -->
+        <g class="reveal" data-stage="5">
+          <path d="M570 160 Q610 160 630 150" fill="none" stroke="var(--rose)" stroke-width="2" marker-end="url(#arrowRose)"/>
+          <rect x="636" y="16" width="190" height="210" rx="12" fill="var(--surface-2)" stroke="var(--rose)" stroke-width="1.6"/>
           <g>
-            <rect x="40" y="110" width="110" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
-            <rect x="40" y="96" width="110" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
-            <rect x="40" y="82" width="110" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
-            <rect x="40" y="68" width="110" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
-            <rect x="40" y="54" width="110" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
-            <rect x="40" y="40" width="110" height="12" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.6"/>
+            <rect x="656" y="36" width="70" height="14" rx="3" fill="var(--rose-bg)" stroke="var(--rose)"/>
+            <rect x="732" y="36" width="70" height="14" rx="3" fill="var(--rose-bg)" stroke="var(--rose)"/>
+            <rect x="656" y="58" width="70" height="14" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="732" y="58" width="70" height="14" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="656" y="80" width="70" height="14" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="732" y="80" width="70" height="14" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="656" y="102" width="70" height="14" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="732" y="102" width="70" height="14" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="656" y="124" width="70" height="14" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="732" y="124" width="70" height="14" rx="3" fill="var(--code-bg)" stroke="var(--line)"/>
           </g>
-          <path d="M150 46 Q182 34 190 14" fill="none" stroke="var(--accent)" stroke-width="2" marker-end="url(#ah3)"/>
-          <rect x="166" y="2" width="62" height="26" rx="8" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="1.6"/>
-          <text x="197" y="19" font-size="10.5" text-anchor="middle" font-family="IBM Plex Mono" fill="#BFE0FF">CoC text</text>
-          <defs><marker id="ah3" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--accent)"/></marker></defs>
-        </svg>
-        <h4>VLM reasoning (causal)</h4>
-        <p>36&#8209;layer Qwen3&#8209;VL backbone encodes all frames and autoregressively writes Chain&#8209;of&#8209;Causation; trajectory tokens are logit&#8209;masked out.</p>
-      </div>
-      <div class="stage-arrow">&#8594;</div>
+          <text x="768" y="152" text-anchor="middle" font-size="13" font-family="IBM Plex Mono" fill="var(--faint)">&times;36</text>
+          <text x="731" y="192" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ink)">Action Expert</text>
+          <text x="731" y="210" text-anchor="middle" font-size="10.5" font-family="IBM Plex Mono" fill="var(--faint)">2.3B &middot; non&#8209;causal</text>
+        </g>
 
-      <div class="stage-card" data-i="4">
-        <span class="num">5 / 8</span>
-        <svg viewBox="0 0 240 150">
-          <g>
-            <rect x="16" y="110" width="80" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
-            <rect x="16" y="96" width="80" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
-            <rect x="16" y="82" width="80" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
-            <rect x="16" y="68" width="80" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
-          </g>
-          <path d="M100 85 Q130 85 150 85" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-dasharray="4 3" marker-end="url(#ah4)"/>
-          <ellipse cx="195" cy="85" rx="36" ry="24" fill="var(--amber-bg)" stroke="var(--amber)" stroke-width="1.8"/>
-          <text x="195" y="89" font-size="12" text-anchor="middle" font-family="IBM Plex Mono" fill="var(--amber)">KV</text>
-          <defs><marker id="ah4" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--amber)"/></marker></defs>
-        </svg>
-        <h4>Cache handoff</h4>
-        <p>The full prompt+reasoning KV&#8209;cache is kept; new M&#8209;RoPE ids and a mask are built for 64 future slots. Nothing is re&#8209;encoded.</p>
-      </div>
-      <div class="stage-arrow">&#8594;</div>
+        <!-- stage 6: action decode -->
+        <g class="reveal" data-stage="6">
+          <path d="M826 190 Q860 220 880 220" fill="none" stroke="var(--green)" stroke-width="2" marker-end="url(#arrowGreen)"/>
+          <rect x="886" y="198" width="110" height="44" rx="8" fill="var(--surface-2)" stroke="var(--green)" stroke-width="1.6"/>
+          <text x="941" y="216" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="var(--ink)">unicycle</text>
+          <text x="941" y="230" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="var(--ink)">integrator</text>
+          <path d="M996 220 H1020" stroke="var(--green)" stroke-width="2" marker-end="url(#arrowGreen)"/>
+          <path d="M1026 240 Q1060 230 1080 190 T1130 150" fill="none" stroke="var(--green)" stroke-width="2.6"/>
+          <circle cx="1026" cy="240" r="3.2" fill="var(--green)"/><circle cx="1080" cy="190" r="3.2" fill="var(--green)"/><circle cx="1130" cy="150" r="3.2" fill="var(--green)"/>
+          <text x="1078" y="268" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink)">(x, y, heading)</text>
+        </g>
 
-      <div class="stage-card" data-i="5">
-        <span class="num">6 / 8</span>
-        <svg viewBox="0 0 240 150" id="diffSvg">
-          <path d="M100 95 H145" stroke="var(--faint)" stroke-width="1.8" marker-end="url(#ah5)"/>
-          <path d="M150 128 Q172 54 224 36" fill="none" stroke="var(--rose)" stroke-width="2.6"/>
-          <defs><marker id="ah5" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--faint)"/></marker></defs>
-        </svg>
-        <h4>Diffusion expert (non&#8209;causal)</h4>
-        <p>A second, narrower 36&#8209;layer transformer denoises 64 waypoints over 10 Euler steps, reading the cache layer&#8209;for&#8209;layer.</p>
-      </div>
-      <div class="stage-arrow">&#8594;</div>
+        <!-- stage 7: combine -->
+        <g class="reveal" data-stage="7">
+          <path d="M626 31 Q700 10 820 60 Q950 90 1000 150" fill="none" stroke="var(--faint)" stroke-width="1.6" stroke-dasharray="3 3"/>
+          <path d="M1130 150 Q1150 150 1160 150" fill="none" stroke="var(--faint)" stroke-width="1.6" stroke-dasharray="3 3"/>
+          <rect x="1000" y="110" width="160" height="80" rx="10" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.6"/>
+          <text x="1080" y="142" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">Output</text>
+          <text x="1080" y="160" text-anchor="middle" font-size="10" fill="var(--muted)">CoC text +</text>
+          <text x="1080" y="174" text-anchor="middle" font-size="10" fill="var(--muted)">trajectory</text>
+        </g>
 
-      <div class="stage-card" data-i="6">
-        <span class="num">7 / 8</span>
-        <svg viewBox="0 0 240 150">
-          <path d="M16 120 Q90 120 125 68 T224 20" fill="none" stroke="var(--green)" stroke-width="2.8"/>
-          <circle cx="16" cy="120" r="3.6" fill="var(--green)"/><circle cx="70" cy="118" r="3.6" fill="var(--green)"/>
-          <circle cx="125" cy="68" r="3.6" fill="var(--green)"/><circle cx="178" cy="40" r="3.6" fill="var(--green)"/>
-          <circle cx="224" cy="20" r="3.6" fill="var(--green)"/>
-        </svg>
-        <h4>Action decode</h4>
-        <p>Each waypoint's (acceleration, curvature) is forward&#8209;integrated through a unicycle kinematic model into (x, y, heading).</p>
-      </div>
-      <div class="stage-arrow">&#8594;</div>
+        <!-- stage 8: rendered -->
+        <g class="reveal" data-stage="8">
+          <path d="M1080 190 V230" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrowAccent)"/>
+          <rect x="1000" y="236" width="160" height="80" rx="10" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="1.6"/>
+          <rect x="1012" y="248" width="60" height="36" rx="4" fill="var(--code-bg)" stroke="var(--line)"/>
+          <path d="M1076 276 Q1095 258 1118 250" fill="none" stroke="var(--accent)" stroke-width="1.8"/>
+          <rect x="1012" y="290" width="136" height="6" rx="2" fill="var(--code-bg)"/>
+          <rect x="1012" y="300" width="100" height="6" rx="2" fill="var(--accent-bg)"/>
+          <text x="1080" y="330" text-anchor="middle" font-size="9.5" font-family="IBM Plex Mono" fill="var(--faint)">demo_video.py</text>
+        </g>
+      </svg>
 
-      <div class="stage-card" data-i="7">
-        <span class="num">8 / 8</span>
-        <svg viewBox="0 0 240 150">
-          <rect x="14" y="10" width="212" height="130" rx="10" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.6"/>
-          <rect x="28" y="24" width="86" height="56" rx="5" fill="var(--code-bg)" stroke="var(--line)"/>
-          <path d="M120 72 Q150 46 182 34" fill="none" stroke="var(--accent)" stroke-width="2.2"/>
-          <rect x="28" y="92" width="184" height="8" rx="3" fill="var(--code-bg)"/>
-          <rect x="28" y="106" width="150" height="8" rx="3" fill="var(--code-bg)"/>
-          <rect x="28" y="120" width="96" height="8" rx="3" fill="var(--accent-bg)"/>
-        </svg>
-        <h4>Output</h4>
-        <p>Text between &#8249;cot_start&#8250;/&#8249;cot_end&#8250; plus the (x,y,heading) trajectory are returned &mdash; what <code>demo_video.py</code> renders.</p>
+      <div class="diagram-caption">
+        <div class="t" id="stageTitle">Inputs</div>
+        <div class="d" id="stageDesc">4 cameras &times; 4 history frames (16 images) + 1.6s ego motion, rotated into the ego&#8209;local frame.</div>
       </div>
-
     </div>
 
     <div class="flow-controls">
@@ -502,15 +486,33 @@
 <section id="scenarios">
   <div class="wide">
     <span class="eyebrow">Run it yourself</span>
-    <h2 class="h">10 scenarios, 10 real rollouts</h2>
+    <h2 class="h">The demo dashboard, in motion</h2>
     <p class="lead">
-      Each card is a real <code>sample_trajectories_from_data_with_vlm_rollout()</code> call on a different
-      clip &mdash; the plot and reasoning are genuine model output. Camera frames are left out on purpose:
-      the PhysicalAI&#8209;AV dataset's license prohibits redistributing or hosting derived clips publicly,
-      so only the trajectory and text (which aren't dataset content) are shown here. Click a card to replay it.
+      This fork's <code>src/alpamayo_r1/demo_video.py</code> renders a full synchronized dashboard &mdash;
+      camera feed, Best/Overall trajectory plots, Chain&#8209;of&#8209;Causation text, and real per&#8209;stage
+      latency &mdash; from one actual rollout. The camera panel is blanked here on purpose (see note below);
+      everything else is the unmodified, real render.
+    </p>
+    <div class="demo-video-wrap">
+      <video controls playsinline muted loop>
+        <source src="demo_public.mp4" type="video/mp4">
+      </video>
+    </div>
+
+    <h2 class="h" style="margin-top:46px;">10 scenarios, 10 real rollouts</h2>
+    <p class="lead">
+      Each card below is a real <code>sample_trajectories_from_data_with_vlm_rollout()</code> call on a
+      different clip, animating continuously &mdash; the path and reasoning are genuine model output.
+      Click a card to replay its reveal animation.
     </p>
     <div class="scenario-grid" id="scenarioGrid"></div>
-    <p class="scenario-note">Full camera-included demo videos exist locally and in a private walkthrough — ask yax for access.</p>
+    <p class="scenario-note">
+      Camera frames are omitted above and in every card: the PhysicalAI&#8209;AV dataset's license prohibits
+      redistributing, hosting or creating derivative works from the dataset &mdash; publicly or privately,
+      commercial or not &mdash; so no camera pixels leave this machine. Trajectories and text are the model's
+      own generated output, not dataset content. Full camera&#8209;included videos exist locally in
+      <code>outputs/</code> and in a private walkthrough for internal use &mdash; ask yax for access.
+    </p>
   </div>
 </section>
 
@@ -567,25 +569,43 @@
 <script src="scenarios.render.js"></script>
 <script>
 (function(){
-  var cards = Array.from(document.querySelectorAll('.stage-card'));
+  var STAGES = [
+    {title: 'Inputs', desc: '4 cameras × 4 history frames (16 images) + 1.6s ego motion, rotated into the ego-local frame.'},
+    {title: 'VLM Backbone', desc: 'Qwen3-VL-8B-Instruct: a 36-layer causal transformer encodes every frame.'},
+    {title: 'Reasoning', desc: 'Autoregressively writes Chain-of-Causation text; trajectory tokens are logit-masked out.'},
+    {title: 'Cache handoff', desc: 'The full prefix KV-cache is kept and repositioned for 64 new future slots — nothing is re-encoded.'},
+    {title: 'Action expert', desc: 'A second, narrower 36-layer transformer (2.3B params) denoises 64 waypoints, reading the cache layer-for-layer.'},
+    {title: 'Action decode', desc: '10 Euler steps produce (acceleration, curvature) per waypoint, integrated through a unicycle model into (x,y,heading).'},
+    {title: 'Combine', desc: 'Both outputs return together: the reasoning text and the (x,y,heading) trajectory.'},
+    {title: 'Rendered', desc: 'This is exactly what this fork’s demo_video.py dashboard visualizes.'}
+  ];
+  var groups = Array.from(document.querySelectorAll('#methodSvg .reveal'));
   var pillsEl = document.getElementById('flowPills');
   var playBtn = document.getElementById('playBtn');
+  var idxEl = document.getElementById('stageIdx');
+  var titleEl = document.getElementById('stageTitle');
+  var descEl = document.getElementById('stageDesc');
   var idx = 0, playing = false, timer = null;
 
-  cards.forEach(function(card, i){
+  STAGES.forEach(function(_, i){
     var pill = document.createElement('button');
     pill.className = 'flow-pill' + (i === 0 ? ' active' : '');
     pill.textContent = i + 1;
-    pill.addEventListener('click', function(){ stop(); setActive(i); });
+    pill.addEventListener('click', function(){ stop(); setStage(i); });
     pillsEl.appendChild(pill);
   });
   var pills = Array.from(pillsEl.children);
 
-  function setActive(i){
-    idx = (i + cards.length) % cards.length;
-    cards.forEach(function(c, j){ c.classList.toggle('active', j === idx); });
+  function setStage(i){
+    idx = Math.max(0, Math.min(i, STAGES.length - 1));
+    groups.forEach(function(group){
+      var stageNum = parseInt(group.getAttribute('data-stage'), 10);
+      group.classList.toggle('revealed', stageNum <= idx + 1);
+    });
     pills.forEach(function(p, j){ p.classList.toggle('active', j === idx); });
-    cards[idx].scrollIntoView({behavior: 'smooth', inline: 'center', block: 'nearest'});
+    idxEl.textContent = idx + 1;
+    titleEl.textContent = STAGES[idx].title;
+    descEl.textContent = STAGES[idx].desc;
   }
 
   function stop(){
@@ -594,16 +614,18 @@
     if (timer) { clearInterval(timer); timer = null; }
   }
 
-  document.getElementById('prevBtn').addEventListener('click', function(){ stop(); setActive(idx - 1); });
-  document.getElementById('nextBtn').addEventListener('click', function(){ stop(); setActive(idx + 1); });
+  document.getElementById('prevBtn').addEventListener('click', function(){ stop(); setStage(idx - 1); });
+  document.getElementById('nextBtn').addEventListener('click', function(){ stop(); setStage(idx + 1); });
   playBtn.addEventListener('click', function(){
     if (playing) { stop(); return; }
     playing = true;
     playBtn.innerHTML = '&#10073;&#10073; Pause';
-    timer = setInterval(function(){ setActive(idx + 1); }, 2200);
+    timer = setInterval(function(){
+      if (idx >= STAGES.length - 1) { setStage(0); } else { setStage(idx + 1); }
+    }, 2200);
   });
 
-  setActive(0);
+  setStage(0);
 })();
 </script>
 
