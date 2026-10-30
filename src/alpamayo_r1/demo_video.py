@@ -102,6 +102,7 @@ class RenderConfig:
     width: int = 1920
     height: int = 1080
     fps: int = 10
+    redact_camera: bool = False
 
 
 def _font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -280,9 +281,19 @@ def _draw_camera_panel(
     scale: float,
 ) -> None:
     left, top, right, bottom = box
-    frame = scenario.camera.frames[min(step, len(scenario.camera.frames) - 1)]
-    fitted = ImageOps.fit(frame, (right - left, bottom - top), method=Image.Resampling.LANCZOS)
-    canvas.paste(fitted, (left, top))
+    if config.redact_camera:
+        draw.rectangle(box, fill="#0B1220")
+        hatch_spacing = round(28 * scale)
+        for offset in range(0, (right - left) + (bottom - top), hatch_spacing):
+            draw.line((left + offset, top, left, top + offset), fill="#16233A", width=1)
+            draw.line((right, top + offset - (right - left), left + offset, bottom), fill="#16233A", width=1)
+        center = ((left + right) // 2, (top + bottom) // 2)
+        draw.text((center[0], center[1] - round(12 * scale)), "Camera feed omitted", font=_font(round(20 * scale), bold=True), fill="#94A3B8", anchor="mm")
+        draw.text((center[0], center[1] + round(16 * scale)), "PhysicalAI-AV dataset license forbids public redistribution", font=_font(round(13 * scale)), fill="#64748B", anchor="mm")
+    else:
+        frame = scenario.camera.frames[min(step, len(scenario.camera.frames) - 1)]
+        fitted = ImageOps.fit(frame, (right - left, bottom - top), method=Image.Resampling.LANCZOS)
+        canvas.paste(fitted, (left, top))
     draw.rectangle(box, outline=PANEL_BORDER, width=2)
 
     pad = round(14 * scale)
