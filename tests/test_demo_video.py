@@ -39,6 +39,7 @@ def _make_scenario(num_samples: int = 3) -> DemoScenario:
         sample_xy_m=samples,
         best_index=0,
         stage_latencies_ms=StageLatenciesMs(vision=120.0, prefill=340.0, decode=610.0, diffusion=90.0),
+        per_sample_latency_ms=tuple(1000.0 + 50.0 * i for i in range(num_samples)),
         resources=ResourceSnapshot(cpu_percent=42.5, rss_mb=2048.0, num_threads=24, per_core_percent=(10.0, 55.0, 30.0, 80.0)),
     )
 

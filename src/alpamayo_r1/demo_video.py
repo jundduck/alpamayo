@@ -17,24 +17,28 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 FloatArray: TypeAlias = NDArray[np.float32]
 
-BACKGROUND: Final = "#080B12"
-PANEL: Final = "#111827"
-PANEL_BORDER: Final = "#263244"
-MUTED: Final = "#94A3B8"
+BACKGROUND_TOP: Final = (10, 40, 102)
+BACKGROUND_BOTTOM: Final = (28, 96, 196)
+PANEL: Final = "#FFFFFF"
+PANEL_BORDER: Final = "#D7DEEA"
+GRID_LINE: Final = "#E4E9F2"
+INK: Final = "#10182B"
+MUTED: Final = "#5B6472"
 WHITE: Final = "#F8FAFC"
-PREDICTED: Final = "#22D3EE"
-PREDICTED_FAINT: Final = "#1E5A66"
-GROUND_TRUTH: Final = "#FB7185"
-HISTORY: Final = "#64748B"
-EGO: Final = "#FACC15"
+ON_WHITE_ACCENT: Final = "#1462C4"
+PREDICTED: Final = "#17A2E0"
+PREDICTED_FAINT: Final = "#AED9F2"
+GROUND_TRUTH: Final = "#E8536B"
+HISTORY: Final = "#8C98A8"
+EGO: Final = "#F2C94C"
 BRAND_BG: Final = "#F8FAFC"
 BRAND_BLUE: Final = "#0C2F6B"
 STAGE_COLORS: Final = {
-    "vision": "#3B82F6",
-    "prefill": "#2DD4BF",
-    "decode": "#FB923C",
-    "diffusion": "#F87171",
-    "total": "#A78BFA",
+    "vision": "#2563EB",
+    "prefill": "#0D9488",
+    "decode": "#EA580C",
+    "diffusion": "#E8536B",
+    "total": "#7C3AED",
 }
 DEFAULT_CLIP_ID: Final = "030c760c-ae38-49aa-9ad8-f5650a545d26"
 DEFAULT_OUTPUT: Final = Path("outputs/alpamayo_demo_030c760c.mp4")
@@ -87,6 +91,7 @@ class DemoScenario:
     sample_xy_m: tuple[FloatArray, ...]
     best_index: int
     stage_latencies_ms: StageLatenciesMs
+    per_sample_latency_ms: tuple[float, ...]
     resources: ResourceSnapshot
 
 
@@ -104,12 +109,21 @@ def _font(size: int, *, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFon
     return ImageFont.truetype(name, max(size, 8))
 
 
+def _gradient_background(config: RenderConfig) -> Image.Image:
+    """A diagonal navy-to-blue gradient, evoking a tech/telemetry dashboard backdrop."""
+    top = np.array(BACKGROUND_TOP, dtype=np.float32)
+    bottom = np.array(BACKGROUND_BOTTOM, dtype=np.float32)
+    diag = np.linspace(0.0, 1.0, config.width)[None, :] * 0.5 + np.linspace(0.0, 1.0, config.height)[:, None] * 0.5
+    gradient = top[None, None, :] + diag[:, :, None] * (bottom - top)[None, None, :]
+    return Image.fromarray(gradient.astype(np.uint8), mode="RGB")
+
+
 def _panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], *, radius: int, fill: str = PANEL) -> None:
     draw.rounded_rectangle(box, radius=radius, fill=fill, outline=PANEL_BORDER, width=2)
 
 
 def _section_label(draw: ImageDraw.ImageDraw, xy: tuple[int, int], text: str, scale: float) -> None:
-    draw.text(xy, text, font=_font(round(19 * scale), bold=True), fill=PREDICTED)
+    draw.text(xy, text, font=_font(round(19 * scale), bold=True), fill=WHITE)
 
 
 def _flatten_strings(value: object) -> list[str]:
@@ -154,6 +168,40 @@ def _traj_to_px(
     ]
 
 
+def _navigation_summary(predicted_xy: FloatArray) -> str:
+    """A short "continue <direction> for <distance>" readout computed from the real predicted path.
+
+    Alpamayo-R1 does not take a navigation-route input or emit navigation text (that is an
+    alpamayo1.5 feature) -- this is derived purely from the geometry of the predicted trajectory,
+    not a model-generated instruction.
+    """
+    lateral = -predicted_xy[:, 1]
+    net_lateral = float(lateral[-1] - lateral[0])
+    distance_m = float(np.linalg.norm(np.diff(predicted_xy, axis=0), axis=1).sum())
+    if net_lateral > 1.0:
+        direction = "right"
+    elif net_lateral < -1.0:
+        direction = "left"
+    else:
+        direction = "straight"
+    return f"Continue {direction} for {distance_m:.0f}m"
+
+
+def _draw_legend_row(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int],
+    entries: tuple[tuple[str, str], ...],
+    scale: float,
+) -> None:
+    x, y = xy
+    swatch = round(10 * scale)
+    font = _font(round(9.5 * scale))
+    for label, color in entries:
+        draw.line((x, y + swatch // 2, x + swatch, y + swatch // 2), fill=color, width=max(round(2.2 * scale), 2))
+        draw.text((x + swatch + round(4 * scale), y), label, font=font, fill=MUTED)
+        x += swatch + round(4 * scale) + round(draw.textlength(label, font=font)) + round(8 * scale)
+
+
 def _draw_traj_plot(
     draw: ImageDraw.ImageDraw,
     box: tuple[int, int, int, int],
@@ -168,13 +216,21 @@ def _draw_traj_plot(
 ) -> None:
     left, top, right, bottom = box
     padding = round(16 * scale)
-    plot = (left + padding, top + round(34 * scale), right - padding, bottom - round(22 * scale))
+    legend_row_h = round(18 * scale)
+    legend_h = legend_row_h * 2
+    plot = (left + padding + round(26 * scale), top + round(34 * scale), right - padding, bottom - round(22 * scale) - legend_h)
+    tick_font = _font(round(10 * scale))
+    min_x, max_x, min_y, max_y = bounds
     for index in range(5):
         x = round(plot[0] + index * (plot[2] - plot[0]) / 4)
         y = round(plot[1] + index * (plot[3] - plot[1]) / 4)
-        draw.line((x, plot[1], x, plot[3]), fill="#1E293B", width=1)
-        draw.line((plot[0], y, plot[2], y), fill="#1E293B", width=1)
-    draw.text((left + padding, top + round(6 * scale)), title, font=_font(round(15 * scale), bold=True), fill=WHITE)
+        draw.line((x, plot[1], x, plot[3]), fill=GRID_LINE, width=1)
+        draw.line((plot[0], y, plot[2], y), fill=GRID_LINE, width=1)
+        x_value = min_x + index * (max_x - min_x) / 4
+        y_value = max_y - index * (max_y - min_y) / 4
+        draw.text((x, plot[3] + round(3 * scale)), f"{x_value:.0f}", font=tick_font, fill=MUTED, anchor="ma")
+        draw.text((plot[0] - round(6 * scale), y), f"{y_value:.0f}", font=tick_font, fill=MUTED, anchor="rm")
+    draw.text((left + padding, top + round(6 * scale)), title, font=_font(round(15 * scale), bold=True), fill=ON_WHITE_ACCENT)
 
     end = min(step + 1, len(ground_truth_xy))
     line_width = max(round(2 * scale), 1)
@@ -197,9 +253,15 @@ def _draw_traj_plot(
     draw.rectangle(
         (ego_px[0] - ego_size, ego_px[1] - ego_size * 2, ego_px[0] + ego_size, ego_px[1] + ego_size),
         fill=EGO,
-        outline=WHITE,
+        outline=INK,
         width=1,
     )
+
+    primary_legend = (("History", HISTORY), ("Ground Truth", GROUND_TRUTH), ("Prediction", PREDICTED), ("Ego Vehicle", EGO))
+    legend_top = bottom - legend_h + round(2 * scale)
+    _draw_legend_row(draw, (left + padding, legend_top), primary_legend, scale)
+    if other_paths:
+        _draw_legend_row(draw, (left + padding, legend_top + legend_row_h), (("Other Predictions", PREDICTED_FAINT),), scale)
 
 
 def _overlay_box(canvas: Image.Image, box: tuple[int, int, int, int], opacity: float) -> None:
@@ -244,7 +306,7 @@ def _draw_camera_panel(
         f"Trajectory sample: {num_samples}/{num_samples}",
     ]
     for index, line in enumerate(lines):
-        draw.text((text_x, text_y + line_h * (index + 1)), line, font=_font(round(14 * scale)), fill=MUTED)
+        draw.text((text_x, text_y + line_h * (index + 1)), line, font=_font(round(14 * scale)), fill="#CBD5E1")
     legend_y = text_y + line_h * (len(lines) + 1)
     swatch = round(16 * scale)
     draw.line((text_x, legend_y + swatch // 2, text_x + swatch, legend_y + swatch // 2), fill=PREDICTED, width=3)
@@ -298,7 +360,7 @@ def _draw_text_panel(
 ) -> None:
     _panel(draw, box, radius=round(12 * scale))
     pad_x = round(18 * scale)
-    draw.text((box[0] + pad_x, box[1] + round(10 * scale)), label, font=_font(round(14 * scale), bold=True), fill=PREDICTED)
+    draw.text((box[0] + pad_x, box[1] + round(10 * scale)), label, font=_font(round(14 * scale), bold=True), fill=ON_WHITE_ACCENT)
     body_font = _font(round(17 * scale), bold=True)
     max_width = (box[2] - box[0]) - 2 * pad_x
     wrapped = _wrap_to_pixel_width(draw, body, body_font, max_width)
@@ -306,7 +368,7 @@ def _draw_text_panel(
         (box[0] + pad_x, box[1] + round(34 * scale)),
         wrapped,
         font=body_font,
-        fill=WHITE,
+        fill=INK,
         spacing=round(5 * scale),
     )
 
@@ -322,7 +384,7 @@ def _panel_header(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], tit
 
 def _draw_resource_panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], resources: ResourceSnapshot, scale: float) -> None:
     _panel(draw, box, radius=round(10 * scale))
-    content_top = _panel_header(draw, box, "PROCESS RESOURCE SUMMARY", "#2563EB", scale)
+    content_top = _panel_header(draw, box, "PROCESS RESOURCE SUMMARY", STAGE_COLORS["vision"], scale)
     rows = [
         ("CPU %", resources.cpu_percent, 100.0),
         ("RSS MB", resources.rss_mb, max(resources.rss_mb * 1.2, 1024.0)),
@@ -336,22 +398,22 @@ def _draw_resource_panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, in
         y = content_top + index * row_h
         draw.text((box[0] + pad, y), label, font=_font(round(13 * scale)), fill=MUTED)
         bar_h = round(12 * scale)
-        draw.rounded_rectangle((bar_left, y + 2, bar_right, y + 2 + bar_h), radius=bar_h // 2, fill="#1E293B")
+        draw.rounded_rectangle((bar_left, y + 2, bar_right, y + 2 + bar_h), radius=bar_h // 2, fill=GRID_LINE)
         fraction = min(value / scale_max, 1.0) if scale_max > 0 else 0.0
         filled_right = bar_left + round((bar_right - bar_left) * fraction)
         if filled_right > bar_left:
             draw.rounded_rectangle((bar_left, y + 2, filled_right, y + 2 + bar_h), radius=bar_h // 2, fill=STAGE_COLORS["vision"])
-        draw.text((bar_right + round(8 * scale), y), f"{value:.1f}", font=_font(round(13 * scale), bold=True), fill=WHITE)
+        draw.text((bar_right + round(8 * scale), y), f"{value:.1f}", font=_font(round(13 * scale), bold=True), fill=INK)
 
 
 def _draw_cpu_core_panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], resources: ResourceSnapshot, scale: float) -> None:
     _panel(draw, box, radius=round(10 * scale))
-    content_top = _panel_header(draw, box, "CPU CORE UTILIZATION", "#0D9488", scale)
+    content_top = _panel_header(draw, box, "CPU CORE UTILIZATION", STAGE_COLORS["prefill"], scale)
     cores = resources.per_core_percent
     pad = round(14 * scale)
     plot = (box[0] + pad, content_top, box[2] - pad, box[3] - round(22 * scale))
-    draw.line((plot[0], plot[1], plot[0], plot[3]), fill="#334155", width=1)
-    draw.line((plot[0], plot[3], plot[2], plot[3]), fill="#334155", width=1)
+    draw.line((plot[0], plot[1], plot[0], plot[3]), fill=GRID_LINE, width=1)
+    draw.line((plot[0], plot[3], plot[2], plot[3]), fill=GRID_LINE, width=1)
     if cores:
         gap = max(round(2 * scale), 1)
         bar_w = max((plot[2] - plot[0] - gap * (len(cores) - 1)) / len(cores), 2.0)
@@ -362,36 +424,51 @@ def _draw_cpu_core_panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, in
     draw.text((plot[0], plot[3] + round(2 * scale)), "core id", font=_font(round(11 * scale)), fill=MUTED)
 
 
-def _draw_minade_panel(
+def _draw_latency_minade_panel(
     draw: ImageDraw.ImageDraw,
     box: tuple[int, int, int, int],
     scenario: DemoScenario,
     scale: float,
 ) -> None:
     _panel(draw, box, radius=round(10 * scale))
-    content_top = _panel_header(draw, box, "MINADE BY SAMPLE", "#7C3AED", scale)
+    content_top = _panel_header(draw, box, "LATENCY _ MINADE", STAGE_COLORS["total"], scale)
+    latencies = scenario.per_sample_latency_ms
     ades = [
         float(np.linalg.norm(sample - scenario.ground_truth_xy_m, axis=1).mean())
         for sample in scenario.sample_xy_m
     ]
     pad = round(14 * scale)
-    plot = (box[0] + pad, content_top, box[2] - pad, box[3] - round(22 * scale))
-    draw.line((plot[0], plot[1], plot[0], plot[3]), fill="#334155", width=1)
-    draw.line((plot[0], plot[3], plot[2], plot[3]), fill="#334155", width=1)
-    max_ade = max(ades) * 1.15 if ades else 1.0
-    gap = max(round(6 * scale), 2)
-    bar_w = max((plot[2] - plot[0] - gap * (len(ades) - 1)) / max(len(ades), 1), 4.0)
-    for index, ade in enumerate(ades):
-        bar_h = (plot[3] - plot[1]) * (ade / max_ade if max_ade > 0 else 0)
-        x0 = plot[0] + index * (bar_w + gap)
-        color = EGO if index == scenario.best_index else STAGE_COLORS["diffusion"]
-        draw.rectangle((x0, plot[3] - bar_h, x0 + bar_w, plot[3]), fill=color)
-    draw.text((plot[0], plot[3] + round(2 * scale)), "sample id  (gold = best)", font=_font(round(11 * scale)), fill=MUTED)
+    plot = (box[0] + pad, content_top, box[2] - pad, box[3] - round(34 * scale))
+    draw.line((plot[0], plot[1], plot[0], plot[3]), fill=GRID_LINE, width=1)
+    draw.line((plot[0], plot[3], plot[2], plot[3]), fill=GRID_LINE, width=1)
+
+    def normalize(values: list[float]) -> list[float]:
+        lo, hi = min(values), max(values)
+        span = hi - lo if hi > lo else 1.0
+        return [(v - lo) / span for v in values]
+
+    def to_points(values: list[float]) -> list[tuple[float, float]]:
+        count = max(len(values) - 1, 1)
+        return [
+            (plot[0] + (index / count) * (plot[2] - plot[0]), plot[3] - value * (plot[3] - plot[1]))
+            for index, value in enumerate(values)
+        ]
+
+    line_width = max(round(2.4 * scale), 2)
+    if len(latencies) > 1:
+        draw.line(to_points(normalize(list(latencies))), fill=STAGE_COLORS["decode"], width=line_width, joint="curve")
+    if len(ades) > 1:
+        draw.line(to_points(normalize(ades)), fill=GROUND_TRUTH, width=line_width, joint="curve")
+
+    label_font = _font(round(12 * scale), bold=True)
+    draw.text((plot[0], plot[3] + round(6 * scale)), f"Latency {latencies[-1]:.0f}ms", font=label_font, fill=STAGE_COLORS["decode"])
+    draw.text((plot[0] + round(130 * scale), plot[3] + round(6 * scale)), f"minADE {ades[-1]:.2f}m", font=label_font, fill=GROUND_TRUTH)
+    draw.text((plot[0], plot[1] - round(2 * scale)), "sample id →", font=_font(round(10 * scale)), fill=MUTED, anchor="ls")
 
 
 def _draw_latency_panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], latencies: StageLatenciesMs, scale: float) -> None:
     _panel(draw, box, radius=round(10 * scale))
-    content_top = _panel_header(draw, box, "LATENCY BY STAGE", "#EA580C", scale)
+    content_top = _panel_header(draw, box, "LATENCY BY STAGE", STAGE_COLORS["decode"], scale)
     rows = [
         ("Vision", latencies.vision, STAGE_COLORS["vision"]),
         ("Prefill", latencies.prefill, STAGE_COLORS["prefill"]),
@@ -410,15 +487,15 @@ def _draw_latency_panel(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int
         bar_h = round(10 * scale)
         fraction = min(value / max_ms, 1.0)
         filled_right = bar_left + round((bar_right - bar_left) * fraction)
-        draw.rounded_rectangle((bar_left, y + 2, bar_right, y + 2 + bar_h), radius=bar_h // 2, fill="#1E293B")
+        draw.rounded_rectangle((bar_left, y + 2, bar_right, y + 2 + bar_h), radius=bar_h // 2, fill=GRID_LINE)
         if filled_right > bar_left:
             draw.rounded_rectangle((bar_left, y + 2, filled_right, y + 2 + bar_h), radius=bar_h // 2, fill=color)
-        draw.text((bar_right + round(8 * scale), y), f"{value:.0f} ms", font=_font(round(12 * scale), bold=True), fill=WHITE)
+        draw.text((bar_right + round(8 * scale), y), f"{value:.0f} ms", font=_font(round(12 * scale), bold=True), fill=INK)
 
 
 def render_frame(scenario: DemoScenario, config: RenderConfig, step: int) -> Image.Image:
     """Render one synchronized camera-and-trajectory dashboard frame."""
-    canvas = Image.new("RGB", (config.width, config.height), BACKGROUND)
+    canvas = _gradient_background(config)
     draw = ImageDraw.Draw(canvas)
     scale = config.width / 1920
     margin = round(24 * scale)
@@ -458,12 +535,8 @@ def render_frame(scenario: DemoScenario, config: RenderConfig, step: int) -> Ima
 
     reasoning_box = (margin, row2_top, camera_right, row2_bottom)
     _draw_text_panel(draw, reasoning_box, "- REASONING (CHAIN OF CAUSATION)", scenario.reasoning, scale)
-    info_box = (plot_left, row2_top, config.width - margin, row2_bottom)
-    info_text = (
-        f"Clip {scenario.clip_id[:8]}… · {scenario.num_cameras} cameras · "
-        f"1.6s history → 6.4s horizon · {scenario.backbone_summary}"
-    )
-    _draw_text_panel(draw, info_box, "- SCENARIO INFO", info_text, scale)
+    nav_box = (plot_left, row2_top, config.width - margin, row2_bottom)
+    _draw_text_panel(draw, nav_box, "- NAVIGATION SUMMARY", _navigation_summary(best_xy), scale)
 
     panel_width = (config.width - 2 * margin - 3 * gap) // 4
     panel_boxes = [
@@ -472,7 +545,7 @@ def render_frame(scenario: DemoScenario, config: RenderConfig, step: int) -> Ima
     ]
     _draw_resource_panel(draw, panel_boxes[0], scenario.resources, scale)
     _draw_cpu_core_panel(draw, panel_boxes[1], scenario.resources, scale)
-    _draw_minade_panel(draw, panel_boxes[2], scenario, scale)
+    _draw_latency_minade_panel(draw, panel_boxes[2], scenario, scale)
     _draw_latency_panel(draw, panel_boxes[3], scenario.stage_latencies_ms, scale)
 
     return canvas
@@ -601,7 +674,9 @@ def generate_demo_scenario(
     # sample and OOM the vision tower). Instead, sample one rollout at a time and accumulate.
     sample_xy_list: list[FloatArray] = []
     cot_list: list[str] = []
+    per_sample_latency_ms: list[float] = []
     for rollout_index in range(num_traj_samples):
+        rollout_start = time.perf_counter()
         torch.cuda.manual_seed_all(42 + rollout_index)
         with torch.autocast("cuda", dtype=torch.bfloat16):
             pred_xyz, _pred_rot, extra = model.sample_trajectories_from_data_with_vlm_rollout(
@@ -609,6 +684,7 @@ def generate_demo_scenario(
                 num_traj_samples=1, max_generation_length=256, return_extra=True,
             )
         torch.cuda.synchronize()
+        per_sample_latency_ms.append((time.perf_counter() - rollout_start) * 1000.0)
         sample_xy_list.append(pred_xyz.detach().cpu().numpy()[0, 0, 0, :, :2].astype(np.float32))
         cot_list.extend(_flatten_strings(extra["cot"][0]))
         del pred_xyz, _pred_rot, extra
@@ -656,6 +732,7 @@ def generate_demo_scenario(
         sample_xy_m=tuple(sample_xy[index] for index in range(sample_xy.shape[0])),
         best_index=best_index,
         stage_latencies_ms=latencies,
+        per_sample_latency_ms=tuple(per_sample_latency_ms),
         resources=resources,
     )
 
