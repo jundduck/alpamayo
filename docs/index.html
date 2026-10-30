@@ -5,26 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Inside Alpamayo-R1 — an architecture walkthrough</title>
 <meta name="description" content="An unofficial, code-grounded walkthrough of NVIDIA's Alpamayo-R1 vision-language-action model.">
+<link rel="icon" href="assets/yax-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#FBFBFA;
-    --surface:#FFFFFF;
-    --line:#E4E2DC;
-    --ink:#1C1C1A;
-    --muted:#5B5B56;
-    --faint:#8C8C86;
-    --accent:#0D6E8C;
-    --accent-ink:#083E4F;
-    --accent-bg:#E6F2F5;
-    --amber:#9A5B13;
-    --amber-bg:#FBF0DF;
-    --rose:#9A3B52;
-    --green:#2C7A5B;
-    --code-bg:#F2F1EC;
-    --shadow:0 1px 2px rgba(28,28,26,0.04), 0 8px 24px rgba(28,28,26,0.05);
+    --bg:#0A0B0D;
+    --surface:#141619;
+    --surface-2:#1C1F24;
+    --line:#2A2E35;
+    --ink:#F3F4F6;
+    --muted:#9AA1AC;
+    --faint:#676E79;
+    --accent:#4FA8FF;
+    --accent-bg:rgba(79,168,255,0.12);
+    --amber:#F2B134;
+    --amber-bg:rgba(242,177,52,0.12);
+    --rose:#F2718A;
+    --rose-bg:rgba(242,113,138,0.12);
+    --green:#3DD68C;
+    --code-bg:#101214;
+    --shadow:0 1px 2px rgba(0,0,0,0.3), 0 10px 30px rgba(0,0,0,0.35);
   }
   *{box-sizing:border-box;}
   html{scroll-behavior:smooth;}
@@ -34,126 +36,136 @@
     font-size:16px;line-height:1.6;
   }
   .mono{font-family:"IBM Plex Mono",monospace;}
-  a{color:var(--accent);text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent);}
-  a:hover{color:var(--accent-ink);}
-  code{font-family:"IBM Plex Mono",monospace;background:var(--code-bg);padding:1px 5px;border-radius:4px;font-size:0.9em;}
+  a{color:var(--accent);}
+  a:hover{color:#8AC6FF;}
+  code{font-family:"IBM Plex Mono",monospace;background:var(--code-bg);padding:1px 5px;border-radius:4px;font-size:0.9em;color:#D7E4F2;}
   .wrap{max-width:860px;margin:0 auto;padding-inline:24px;}
-  .wide{max-width:980px;margin:0 auto;padding-inline:24px;}
+  .wide{max-width:1040px;margin:0 auto;padding-inline:24px;}
 
-  /* nav */
-  nav{position:sticky;top:0;z-index:30;background:color-mix(in srgb, var(--bg) 90%, transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);}
-  .nav-inner{max-width:980px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:22px;overflow-x:auto;}
-  .nav-inner .brand{font-weight:700;font-size:15px;white-space:nowrap;}
+  nav{position:sticky;top:0;z-index:30;background:rgba(10,11,13,0.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+  .nav-inner{max-width:1040px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:20px;overflow-x:auto;}
+  .nav-logo{width:26px;height:26px;border-radius:6px;background:#fff;padding:2px;flex:none;}
+  .nav-logo img{width:100%;height:100%;object-fit:contain;display:block;}
+  .nav-inner .brand{font-weight:700;font-size:14.5px;white-space:nowrap;}
   .nav-inner .links{display:flex;gap:18px;white-space:nowrap;}
-  .nav-inner .links a{font-size:13.5px;color:var(--muted);font-weight:500;text-decoration:none;}
+  .nav-inner .links a{font-size:13px;color:var(--muted);font-weight:500;text-decoration:none;}
   .nav-inner .links a:hover{color:var(--accent);}
 
-  /* hero */
   header.hero{padding:64px 0 44px;text-align:center;border-bottom:1px solid var(--line);}
+  .logo-chip{width:88px;height:88px;border-radius:20px;background:#fff;padding:10px;margin:0 auto 20px;box-shadow:var(--shadow);}
+  .logo-chip img{width:100%;height:100%;object-fit:contain;display:block;}
   .badge-unofficial{
     display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
-    color:var(--amber);background:var(--amber-bg);border:1px solid color-mix(in srgb, var(--amber) 35%, transparent);
-    border-radius:999px;padding:5px 14px;margin-bottom:22px;
+    color:var(--amber);background:var(--amber-bg);border:1px solid rgba(242,177,52,0.35);
+    border-radius:999px;padding:5px 14px;margin-bottom:20px;
   }
   h1.title{font-size:clamp(32px,5.4vw,46px);font-weight:700;margin:0;letter-spacing:-0.01em;}
   p.subtitle{font-size:18px;color:var(--muted);max-width:620px;margin:16px auto 0;}
-  .byline{margin-top:22px;font-size:14px;color:var(--faint);}
+  .byline{margin-top:20px;font-size:14px;color:var(--faint);}
   .byline a{color:var(--muted);font-weight:600;}
   .link-row{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:26px;}
   .link-pill{
     font-size:13.5px;font-weight:600;color:var(--ink);background:var(--surface);
     border:1px solid var(--line);border-radius:8px;padding:8px 16px;text-decoration:none;
-    box-shadow:var(--shadow);
   }
-  .link-pill:hover{border-color:var(--accent);color:var(--accent-ink);}
+  .link-pill:hover{border-color:var(--accent);color:#BFE0FF;}
   .link-pill .k{color:var(--faint);font-weight:500;margin-right:6px;}
 
-  /* sections */
   section{padding:56px 0;border-bottom:1px solid var(--line);}
   .eyebrow{font-family:"IBM Plex Mono";font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent);}
   h2.h{font-size:clamp(24px,3.6vw,30px);font-weight:700;margin:8px 0 0;letter-spacing:-0.01em;}
   p.lead{color:var(--muted);max-width:680px;margin-top:12px;font-size:15.5px;}
-
-  .intro-text{font-size:17px;color:var(--ink);max-width:720px;margin:0 auto;}
-  .intro-text strong{color:var(--accent-ink);}
+  .intro-text{font-size:17px;max-width:720px;margin:0 auto;}
+  .intro-text strong{color:#BFE0FF;}
+  blockquote.abstract{
+    font-size:16px;color:var(--muted);border-left:3px solid var(--accent);
+    padding:4px 0 4px 18px;margin:0 auto;max-width:680px;font-style:italic;
+  }
 
   .flag{
-    margin-top:22px;border:1px solid color-mix(in srgb, var(--amber) 45%, transparent);border-left-width:4px;
+    margin-top:22px;border:1px solid rgba(242,177,52,0.4);border-left-width:4px;
     background:var(--amber-bg);border-radius:8px;padding:16px 18px;font-size:14.5px;
   }
   .flag b{color:var(--amber);}
 
-  /* ---- method viewer ---- */
-  .viewer{
-    margin-top:30px;background:var(--surface);border:1px solid var(--line);border-radius:14px;
-    box-shadow:var(--shadow);overflow:hidden;
+  /* ---- method: persistent flow rail ---- */
+  .flow-rail{
+    display:flex;gap:18px;overflow-x:auto;padding:10px 4px 22px;margin-top:30px;
+    scroll-snap-type:x proximity;scrollbar-width:thin;
   }
-  .viewer-top{display:flex;justify-content:space-between;align-items:center;padding:16px 20px 0;}
-  .viewer-counter{font-family:"IBM Plex Mono";font-size:12.5px;color:var(--faint);border:1px solid var(--line);border-radius:6px;padding:3px 10px;}
-  .viewer-stage-name{font-weight:700;font-size:14px;color:var(--accent-ink);}
-  .viewer-canvas{
-    display:flex;align-items:center;justify-content:center;padding:28px 20px 10px;min-height:240px;
+  .stage-card{
+    scroll-snap-align:center;flex:0 0 250px;background:var(--surface);
+    border:1px solid var(--line);border-radius:14px;padding:16px 16px 18px;
+    transition:border-color .25s, transform .25s, box-shadow .25s;position:relative;
   }
-  .viewer-canvas svg{max-width:420px;width:100%;height:auto;}
-  .viewer-caption{padding:0 28px 22px;text-align:center;}
-  .viewer-caption .t{font-weight:700;font-size:16px;}
-  .viewer-caption .d{color:var(--muted);font-size:14px;margin-top:6px;max-width:560px;margin-inline:auto;}
-  .viewer-controls{
-    display:flex;align-items:center;gap:10px;padding:14px 20px;border-top:1px solid var(--line);
-    background:var(--code-bg);flex-wrap:wrap;
+  .stage-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent), var(--shadow);transform:translateY(-3px);}
+  .stage-card .num{
+    font-family:"IBM Plex Mono";font-size:11px;font-weight:600;color:var(--faint);
+    background:var(--surface-2);border-radius:5px;padding:2px 7px;display:inline-block;margin-bottom:10px;
   }
+  .stage-card.active .num{color:var(--accent);background:var(--accent-bg);}
+  .stage-card svg{width:100%;height:120px;display:block;margin-bottom:10px;}
+  .stage-card h4{font-size:15px;margin:0 0 6px;font-weight:700;}
+  .stage-card p{font-size:12.8px;color:var(--muted);margin:0;line-height:1.5;}
+  .stage-arrow{flex:0 0 20px;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:16px;align-self:center;}
+
+  .flow-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .ctl-btn{
     border:1px solid var(--line);background:var(--surface);border-radius:8px;
     width:34px;height:34px;display:flex;align-items:center;justify-content:center;
     cursor:pointer;font-size:14px;color:var(--ink);
   }
-  .ctl-btn:hover{border-color:var(--accent);color:var(--accent-ink);}
+  .ctl-btn:hover{border-color:var(--accent);color:#BFE0FF;}
   .ctl-btn.play{width:auto;padding:0 14px;gap:6px;font-weight:600;font-size:13px;}
-  .stage-pills{display:flex;gap:6px;flex-wrap:wrap;flex:1;}
-  .stage-pill{
-    border:1px solid var(--line);background:var(--surface);border-radius:999px;
-    font-family:"IBM Plex Mono";font-size:11.5px;font-weight:600;color:var(--muted);
-    padding:6px 11px;cursor:pointer;display:flex;align-items:center;gap:6px;
+  .flow-pills{display:flex;gap:6px;flex-wrap:wrap;}
+  .flow-pill{
+    width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--surface);
+    color:var(--muted);font-family:"IBM Plex Mono";font-size:11px;font-weight:600;cursor:pointer;
   }
-  .stage-pill .num{
-    width:16px;height:16px;border-radius:50%;background:var(--line);color:var(--surface);
-    display:flex;align-items:center;justify-content:center;font-size:9.5px;
-  }
-  .stage-pill.active{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-bg);}
-  .stage-pill.active .num{background:var(--accent);}
-  @media (max-width:640px){.stage-pills span.lbl{display:none;}}
+  .flow-pill.active{border-color:var(--accent);color:#fff;background:var(--accent);}
 
   /* core trick */
   .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;}
   @media (max-width:640px){.two-col{grid-template-columns:1fr;}}
-  .phase-card{border:1px solid var(--line);border-radius:10px;padding:16px 18px;background:var(--surface);box-shadow:var(--shadow);}
-  .phase-card h4{font-size:13.5px;font-family:"IBM Plex Mono";color:var(--accent-ink);margin:0 0 8px;}
+  .phase-card{border:1px solid var(--line);border-radius:10px;padding:16px 18px;background:var(--surface);}
+  .phase-card h4{font-size:13.5px;font-family:"IBM Plex Mono";color:var(--accent);margin:0 0 8px;}
   .phase-card.b h4{color:var(--rose);}
   .phase-card ul{margin:0;padding-left:18px;font-size:13.5px;color:var(--muted);}
   .phase-card li{margin-block:4px;}
-  .trick-wrap{margin-top:26px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:22px;overflow-x:auto;box-shadow:var(--shadow);}
+  .trick-wrap{margin-top:26px;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:22px;overflow-x:auto;}
 
   /* action space */
   .grid2{display:grid;grid-template-columns:1.1fr 0.9fr;gap:26px;margin-top:24px;align-items:start;}
   @media (max-width:720px){.grid2{grid-template-columns:1fr;}}
-  .formula-box{border:1px solid var(--line);border-radius:10px;background:var(--code-bg);padding:18px 20px;font-family:"IBM Plex Mono";font-size:13px;color:var(--accent-ink);overflow-x:auto;}
+  .formula-box{border:1px solid var(--line);border-radius:10px;background:var(--code-bg);padding:18px 20px;font-family:"IBM Plex Mono";font-size:13px;color:#BFE0FF;overflow-x:auto;}
   .formula-box .c{color:var(--faint);}
   .bound-row{display:flex;justify-content:space-between;font-size:13.5px;padding-block:9px;border-bottom:1px solid var(--line);}
   .bound-row:last-child{border-bottom:none;}
   .bound-row .k{color:var(--muted);}
   .bound-row .v{font-family:"IBM Plex Mono";color:var(--ink);}
 
+  /* scenarios gallery */
+  .scenario-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;margin-top:28px;}
+  .scenario-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:border-color .2s;}
+  .scenario-card:hover{border-color:var(--accent);}
+  .scenario-card canvas{width:100%;height:150px;display:block;border-radius:8px;background:var(--code-bg);}
+  .scenario-card .meta{display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;}
+  .scenario-card .cid{font-family:"IBM Plex Mono";font-size:10.5px;color:var(--faint);}
+  .scenario-card .ade{font-family:"IBM Plex Mono";font-size:11.5px;color:var(--accent);font-weight:600;}
+  .scenario-card .reason{font-size:12.3px;color:var(--muted);margin-top:8px;line-height:1.45;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  .scenario-note{font-size:12.5px;color:var(--faint);margin-top:16px;}
+
   /* numbers */
-  .numbers{margin-top:24px;border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:var(--shadow);}
+  .numbers{margin-top:24px;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
   .numbers .row{display:grid;grid-template-columns:1.4fr 1fr 1.6fr;gap:10px;padding:12px 18px;font-size:13.5px;background:var(--surface);}
-  .numbers .row:nth-child(even){background:var(--code-bg);}
+  .numbers .row:nth-child(even){background:var(--surface-2);}
   .numbers .row.head{background:transparent;font-family:"IBM Plex Mono";font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--faint);padding-bottom:6px;}
   .numbers .k{font-weight:600;}
-  .numbers .v{font-family:"IBM Plex Mono";color:var(--accent-ink);}
+  .numbers .v{font-family:"IBM Plex Mono";color:var(--accent);}
   .numbers .d{color:var(--muted);}
   @media (max-width:640px){.numbers .row{grid-template-columns:1fr;}}
 
-  /* citation */
   .cite-box{margin-top:20px;background:var(--code-bg);border:1px solid var(--line);border-radius:10px;padding:18px 20px;font-family:"IBM Plex Mono";font-size:12px;color:var(--muted);white-space:pre-wrap;overflow-x:auto;}
 
   footer{padding:46px 0 70px;text-align:center;}
@@ -165,11 +177,14 @@
 
 <nav>
   <div class="nav-inner">
+    <div class="nav-logo"><img src="assets/yax-logo.png" alt="yax"></div>
     <span class="brand">ALPAMAYO&#8209;R1</span>
     <div class="links">
+      <a href="#abstract">Abstract</a>
       <a href="#method">Method</a>
       <a href="#trick">Core trick</a>
       <a href="#actions">Action space</a>
+      <a href="#scenarios">Scenarios</a>
       <a href="#numbers">Numbers</a>
       <a href="#cite">Cite</a>
     </div>
@@ -178,37 +193,43 @@
 
 <header class="hero">
   <div class="wrap">
+    <div class="logo-chip"><img src="assets/yax-logo.png" alt="yax logo"></div>
     <div class="badge-unofficial">&#9888; Unofficial walkthrough &middot; not an NVIDIA page</div>
     <h1 class="title">Inside Alpamayo&#8209;R1</h1>
     <p class="subtitle">
       A code&#8209;grounded tour of NVIDIA's open vision&#8209;language&#8209;action model for autonomous
-      driving &mdash; eight cameras in, a plain&#8209;English reason and a 6.4&#8209;second trajectory out.
+      driving &mdash; four cameras in, a plain&#8209;English reason and a 6.4&#8209;second trajectory out.
     </p>
-    <div class="byline">Reverse&#8209;engineered from <code>src/alpamayo_r1/</code> for internal study &middot; maintained at <a href="https://github.com/jundduck/alpamayo" target="_blank" rel="noopener">jundduck/alpamayo</a></div>
+    <div class="byline">Compiled by <b>yax</b> for internal study &middot; site source at <a href="https://github.com/jundduck/alpamayo" target="_blank" rel="noopener">jundduck/alpamayo</a></div>
     <div class="link-row">
       <a class="link-pill" href="https://arxiv.org/abs/2511.00088" target="_blank" rel="noopener"><span class="k">Paper</span>arXiv:2511.00088</a>
       <a class="link-pill" href="https://huggingface.co/nvidia/Alpamayo-R1-10B" target="_blank" rel="noopener"><span class="k">Model</span>Alpamayo&#8209;R1&#8209;10B</a>
+      <a class="link-pill" href="https://huggingface.co/datasets/nvidia/PhysicalAI-Autonomous-Vehicles" target="_blank" rel="noopener"><span class="k">Dataset</span>PhysicalAI&#8209;AV</a>
       <a class="link-pill" href="https://github.com/NVlabs/alpamayo" target="_blank" rel="noopener"><span class="k">Official</span>NVlabs/alpamayo</a>
-      <a class="link-pill" href="https://github.com/NVlabs/alpamayo1.5" target="_blank" rel="noopener"><span class="k">Successor</span>alpamayo1.5</a>
     </div>
   </div>
 </header>
 
-<section id="overview">
+<section id="abstract">
   <div class="wrap">
-    <p class="intro-text">
-      Alpamayo&#8209;R1 is an <strong>11.1B&#8209;parameter</strong> model that takes 4 calibrated cameras
-      and 1.6&nbsp;seconds of ego motion history, and in one forward pass produces a free&#8209;text
-      <strong>Chain&#8209;of&#8209;Causation</strong> explanation and a <strong>64&#8209;waypoint, 6.4&#8209;second</strong>
-      trajectory. This page walks through what the released code actually does, stage by stage &mdash;
-      click through the pipeline below the way you would in the source.
+    <span class="eyebrow">Abstract</span>
+    <h2 class="h">What NVIDIA says it does</h2>
+    <blockquote class="abstract">
+      &ldquo;We introduce Alpamayo 1, a vision&ndash;language&ndash;action model (VLA) that integrates Chain
+      of Causation reasoning with trajectory planning to enhance decision&#8209;making in complex driving
+      scenarios.&rdquo; &mdash; <a href="https://research.nvidia.com/publication/2025-10_alpamayo-r1" target="_blank" rel="noopener">NVIDIA Research</a>
+    </blockquote>
+    <p class="lead" style="margin:18px auto 0;">
+      Trained on 1,727 hours of driving (300,000+ clips across 25 countries), reported to reach
+      state&#8209;of&#8209;the&#8209;art results on reasoning, trajectory generation, alignment, safety and
+      latency &mdash; via open&#8209;loop metrics, closed&#8209;loop simulation and real&#8209;vehicle tests.
+      The rest of this page is not that evaluation; it's what the <em>released code</em> does, read directly.
     </p>
     <div class="flag">
       <b>Worth knowing:</b> the repo's own README describes the backbone as
       <span class="mono">Cosmos&#8209;Reason</span>. The shipped checkpoint and <span class="mono">base_model.py</span>
       actually load <span class="mono">Qwen/Qwen3&#8209;VL&#8209;8B&#8209;Instruct</span>
-      (<span class="mono">config.json: "vlm_backend": "qwenvl3"</span>). This page describes what runs,
-      not what the table says.
+      (<span class="mono">config.json: "vlm_backend": "qwenvl3"</span>). Everything below describes what runs.
     </div>
   </div>
 </section>
@@ -219,25 +240,154 @@
     <h2 class="h">One inference call, eight stages</h2>
     <p class="lead">
       <code>AlpamayoR1.sample_trajectories_from_data_with_vlm_rollout()</code> is the single method both
-      <code>test_inference.py</code> and this fork's <code>demo_video.py</code> call. Step through it:
+      <code>test_inference.py</code> and this fork's <code>demo_video.py</code> call. Step through it with
+      the controls below &mdash; every stage you've seen stays visible.
     </p>
 
-    <div class="viewer">
-      <div class="viewer-top">
-        <span class="viewer-stage-name" id="stageName">Inputs</span>
-        <span class="viewer-counter"><span id="stageIdx">1</span> / 8</span>
+    <div class="flow-rail" id="flowRail">
+
+      <div class="stage-card" data-i="0">
+        <span class="num">1 / 8</span>
+        <svg viewBox="0 0 240 150"><g fill="none" stroke="var(--accent)" stroke-width="2.4">
+          <rect x="26" y="16" width="86" height="54" rx="6"/><rect x="128" y="16" width="86" height="54" rx="6"/>
+          <rect x="26" y="78" width="86" height="54" rx="6"/><rect x="128" y="78" width="86" height="54" rx="6"/>
+        </g>
+        <circle cx="180" cy="122" r="18" fill="none" stroke="var(--faint)" stroke-width="2.2"/>
+        <line x1="180" y1="122" x2="180" y2="109" stroke="var(--faint)" stroke-width="2.2"/>
+        <line x1="180" y1="122" x2="190" y2="125" stroke="var(--faint)" stroke-width="2.2"/>
+        <text x="60" y="128" font-size="12" fill="var(--muted)" font-family="IBM Plex Mono">1.6s hist.</text></svg>
+        <h4>Inputs</h4>
+        <p>4 cameras &times; 4 history frames (16 images) plus 1.6s of ego motion, rotated into the ego&#8209;local frame at t0.</p>
       </div>
-      <div class="viewer-canvas" id="stageCanvas"></div>
-      <div class="viewer-caption">
-        <div class="t" id="stageTitle">Posed multi&#8209;camera inputs</div>
-        <div class="d" id="stageDesc">Calibrated, time&#8209;synchronized frames provide the observation.</div>
+      <div class="stage-arrow">&#8594;</div>
+
+      <div class="stage-card" data-i="1">
+        <span class="num">2 / 8</span>
+        <svg viewBox="0 0 240 150">
+          <g fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.8">
+            <rect x="14" y="60" width="30" height="30" rx="5"/><rect x="50" y="60" width="30" height="30" rx="5"/><rect x="86" y="60" width="30" height="30" rx="5"/>
+          </g>
+          <text x="29" y="80" font-size="10" text-anchor="middle" fill="#BFE0FF">img</text>
+          <text x="65" y="80" font-size="10" text-anchor="middle" fill="#BFE0FF">img</text>
+          <text x="101" y="80" font-size="10" text-anchor="middle" fill="#BFE0FF">&hellip;</text>
+          <path d="M122 75 H148" stroke="var(--faint)" stroke-width="1.8" marker-end="url(#ah1)"/>
+          <rect x="154" y="36" width="76" height="78" rx="10" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.6"/>
+          <text x="192" y="68" font-size="10.5" text-anchor="middle" font-family="IBM Plex Mono" fill="var(--ink)">&#8249;cot</text>
+          <text x="192" y="82" font-size="10.5" text-anchor="middle" font-family="IBM Plex Mono" fill="var(--ink)">start&#8250;</text>
+          <text x="192" y="100" font-size="9" text-anchor="middle" fill="var(--muted)">continue&#8230;</text>
+          <defs><marker id="ah1" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--faint)"/></marker></defs>
+        </svg>
+        <h4>Prompt</h4>
+        <p>16 image tokens + 48 history&#8209;placeholder tokens; the assistant turn is pre&#8209;seeded so generation must continue it.</p>
       </div>
-      <div class="viewer-controls">
-        <button class="ctl-btn" id="prevBtn" aria-label="Previous stage">&#8249;</button>
-        <button class="ctl-btn play" id="playBtn" aria-label="Play">&#9654; Play</button>
-        <button class="ctl-btn" id="nextBtn" aria-label="Next stage">&#8250;</button>
-        <div class="stage-pills" id="stagePills"></div>
+      <div class="stage-arrow">&#8594;</div>
+
+      <div class="stage-card" data-i="2">
+        <span class="num">3 / 8</span>
+        <svg viewBox="0 0 240 150">
+          <path d="M16 110 Q70 30 120 76 T220 50" fill="none" stroke="var(--faint)" stroke-width="2.4"/>
+          <path d="M150 80 V100" stroke="var(--faint)" stroke-width="1.8" marker-end="url(#ah2)"/>
+          <g>
+            <rect x="60" y="112" width="18" height="24" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.4"/>
+            <rect x="82" y="112" width="18" height="24" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.4"/>
+            <rect x="104" y="112" width="18" height="24" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.4"/>
+            <rect x="126" y="112" width="18" height="24" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.4"/>
+            <rect x="148" y="112" width="18" height="24" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.4"/>
+          </g>
+          <text x="105" y="130" font-size="10.5" text-anchor="middle" fill="var(--muted)" font-family="IBM Plex Mono">&times;48</text>
+          <defs><marker id="ah2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--faint)"/></marker></defs>
+        </svg>
+        <h4>History tokens</h4>
+        <p>16 steps &times; 3 dims of ego&#8209;local motion delta&#8209;encoded into 48 integers, scattered into the placeholder slots.</p>
       </div>
+      <div class="stage-arrow">&#8594;</div>
+
+      <div class="stage-card" data-i="3">
+        <span class="num">4 / 8</span>
+        <svg viewBox="0 0 240 150">
+          <g>
+            <rect x="40" y="110" width="110" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="40" y="96" width="110" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="40" y="82" width="110" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="40" y="68" width="110" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="40" y="54" width="110" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="40" y="40" width="110" height="12" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.6"/>
+          </g>
+          <path d="M150 46 Q182 34 190 14" fill="none" stroke="var(--accent)" stroke-width="2" marker-end="url(#ah3)"/>
+          <rect x="166" y="2" width="62" height="26" rx="8" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="1.6"/>
+          <text x="197" y="19" font-size="10.5" text-anchor="middle" font-family="IBM Plex Mono" fill="#BFE0FF">CoC text</text>
+          <defs><marker id="ah3" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--accent)"/></marker></defs>
+        </svg>
+        <h4>VLM reasoning (causal)</h4>
+        <p>36&#8209;layer Qwen3&#8209;VL backbone encodes all frames and autoregressively writes Chain&#8209;of&#8209;Causation; trajectory tokens are logit&#8209;masked out.</p>
+      </div>
+      <div class="stage-arrow">&#8594;</div>
+
+      <div class="stage-card" data-i="4">
+        <span class="num">5 / 8</span>
+        <svg viewBox="0 0 240 150">
+          <g>
+            <rect x="16" y="110" width="80" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="16" y="96" width="80" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="16" y="82" width="80" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
+            <rect x="16" y="68" width="80" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
+          </g>
+          <path d="M100 85 Q130 85 150 85" fill="none" stroke="var(--amber)" stroke-width="2.2" stroke-dasharray="4 3" marker-end="url(#ah4)"/>
+          <ellipse cx="195" cy="85" rx="36" ry="24" fill="var(--amber-bg)" stroke="var(--amber)" stroke-width="1.8"/>
+          <text x="195" y="89" font-size="12" text-anchor="middle" font-family="IBM Plex Mono" fill="var(--amber)">KV</text>
+          <defs><marker id="ah4" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--amber)"/></marker></defs>
+        </svg>
+        <h4>Cache handoff</h4>
+        <p>The full prompt+reasoning KV&#8209;cache is kept; new M&#8209;RoPE ids and a mask are built for 64 future slots. Nothing is re&#8209;encoded.</p>
+      </div>
+      <div class="stage-arrow">&#8594;</div>
+
+      <div class="stage-card" data-i="5">
+        <span class="num">6 / 8</span>
+        <svg viewBox="0 0 240 150" id="diffSvg">
+          <path d="M100 95 H145" stroke="var(--faint)" stroke-width="1.8" marker-end="url(#ah5)"/>
+          <path d="M150 128 Q172 54 224 36" fill="none" stroke="var(--rose)" stroke-width="2.6"/>
+          <defs><marker id="ah5" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--faint)"/></marker></defs>
+        </svg>
+        <h4>Diffusion expert (non&#8209;causal)</h4>
+        <p>A second, narrower 36&#8209;layer transformer denoises 64 waypoints over 10 Euler steps, reading the cache layer&#8209;for&#8209;layer.</p>
+      </div>
+      <div class="stage-arrow">&#8594;</div>
+
+      <div class="stage-card" data-i="6">
+        <span class="num">7 / 8</span>
+        <svg viewBox="0 0 240 150">
+          <path d="M16 120 Q90 120 125 68 T224 20" fill="none" stroke="var(--green)" stroke-width="2.8"/>
+          <circle cx="16" cy="120" r="3.6" fill="var(--green)"/><circle cx="70" cy="118" r="3.6" fill="var(--green)"/>
+          <circle cx="125" cy="68" r="3.6" fill="var(--green)"/><circle cx="178" cy="40" r="3.6" fill="var(--green)"/>
+          <circle cx="224" cy="20" r="3.6" fill="var(--green)"/>
+        </svg>
+        <h4>Action decode</h4>
+        <p>Each waypoint's (acceleration, curvature) is forward&#8209;integrated through a unicycle kinematic model into (x, y, heading).</p>
+      </div>
+      <div class="stage-arrow">&#8594;</div>
+
+      <div class="stage-card" data-i="7">
+        <span class="num">8 / 8</span>
+        <svg viewBox="0 0 240 150">
+          <rect x="14" y="10" width="212" height="130" rx="10" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.6"/>
+          <rect x="28" y="24" width="86" height="56" rx="5" fill="var(--code-bg)" stroke="var(--line)"/>
+          <path d="M120 72 Q150 46 182 34" fill="none" stroke="var(--accent)" stroke-width="2.2"/>
+          <rect x="28" y="92" width="184" height="8" rx="3" fill="var(--code-bg)"/>
+          <rect x="28" y="106" width="150" height="8" rx="3" fill="var(--code-bg)"/>
+          <rect x="28" y="120" width="96" height="8" rx="3" fill="var(--accent-bg)"/>
+        </svg>
+        <h4>Output</h4>
+        <p>Text between &#8249;cot_start&#8250;/&#8249;cot_end&#8250; plus the (x,y,heading) trajectory are returned &mdash; what <code>demo_video.py</code> renders.</p>
+      </div>
+
+    </div>
+
+    <div class="flow-controls">
+      <button class="ctl-btn" id="prevBtn" aria-label="Previous stage">&#8249;</button>
+      <button class="ctl-btn play" id="playBtn" aria-label="Play">&#9654; Play</button>
+      <button class="ctl-btn" id="nextBtn" aria-label="Next stage">&#8250;</button>
+      <div class="flow-pills" id="flowPills"></div>
     </div>
   </div>
 </section>
@@ -253,14 +403,13 @@
     </p>
     <div class="trick-wrap">
       <svg viewBox="0 0 920 300" width="100%" role="img" aria-label="Diagram of the shared key-value cache between the 36-layer VLM backbone and the 36-layer action expert">
-        <text x="190" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent-ink)">Phase A &mdash; VLM backbone</text>
+        <text x="190" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent)">Phase A &mdash; VLM backbone</text>
         <text x="190" y="44" text-anchor="middle" font-size="11" fill="var(--faint)" font-family="IBM Plex Mono">causal &middot; 36 layers &middot; hidden 4096</text>
         <text x="730" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="var(--rose)">Phase B &mdash; action expert</text>
         <text x="730" y="44" text-anchor="middle" font-size="11" fill="var(--faint)" font-family="IBM Plex Mono">non&#8209;causal &middot; 36 layers &middot; hidden 2048</text>
-
         <g>
           <rect x="120" y="60" width="140" height="18" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.2"/>
-          <text x="190" y="73" text-anchor="middle" font-size="10" fill="var(--accent-ink)" font-family="IBM Plex Mono">layer 35 (top)</text>
+          <text x="190" y="73" text-anchor="middle" font-size="10" fill="#BFE0FF" font-family="IBM Plex Mono">layer 35 (top)</text>
           <rect x="120" y="82" width="140" height="8" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
           <rect x="120" y="94" width="140" height="8" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
           <rect x="120" y="106" width="140" height="8" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
@@ -272,12 +421,11 @@
           <rect x="120" y="178" width="140" height="8" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
           <rect x="120" y="190" width="140" height="8" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
           <rect x="120" y="202" width="140" height="18" rx="3" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.2"/>
-          <text x="190" y="215" text-anchor="middle" font-size="10" fill="var(--accent-ink)" font-family="IBM Plex Mono">layer 0 (bottom)</text>
+          <text x="190" y="215" text-anchor="middle" font-size="10" fill="#BFE0FF" font-family="IBM Plex Mono">layer 0 (bottom)</text>
         </g>
-
         <g>
-          <rect x="660" y="60" width="140" height="18" rx="3" fill="#F6E7EB" stroke="var(--rose)" stroke-width="1.2"/>
-          <text x="730" y="73" text-anchor="middle" font-size="10" fill="var(--rose)" font-family="IBM Plex Mono">layer 35</text>
+          <rect x="660" y="60" width="140" height="18" rx="3" fill="var(--rose-bg)" stroke="var(--rose)" stroke-width="1.2"/>
+          <text x="730" y="73" text-anchor="middle" font-size="10" fill="#FBC3CF" font-family="IBM Plex Mono">layer 35</text>
           <rect x="660" y="82" width="140" height="8" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
           <rect x="660" y="94" width="140" height="8" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
           <rect x="660" y="106" width="140" height="8" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
@@ -288,16 +436,14 @@
           <rect x="660" y="166" width="140" height="8" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
           <rect x="660" y="178" width="140" height="8" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
           <rect x="660" y="190" width="140" height="8" rx="2" fill="var(--code-bg)" stroke="var(--line)"/>
-          <rect x="660" y="202" width="140" height="18" rx="3" fill="#F6E7EB" stroke="var(--rose)" stroke-width="1.2"/>
-          <text x="730" y="215" text-anchor="middle" font-size="10" fill="var(--rose)" font-family="IBM Plex Mono">layer 0</text>
+          <rect x="660" y="202" width="140" height="18" rx="3" fill="var(--rose-bg)" stroke="var(--rose)" stroke-width="1.2"/>
+          <text x="730" y="215" text-anchor="middle" font-size="10" fill="#FBC3CF" font-family="IBM Plex Mono">layer 0</text>
         </g>
-
         <line x1="260" y1="69" x2="660" y2="69" stroke="var(--amber)" stroke-width="1.3" stroke-dasharray="3 3"/>
         <line x1="260" y1="126" x2="660" y2="126" stroke="var(--amber)" stroke-width="1.3" stroke-dasharray="3 3"/>
         <line x1="260" y1="211" x2="660" y2="211" stroke="var(--amber)" stroke-width="1.3" stroke-dasharray="3 3"/>
         <text x="480" y="104" text-anchor="middle" font-size="10.5" fill="var(--amber)" font-family="IBM Plex Mono">layer i reads layer i's KV cache</text>
-
-        <rect x="120" y="248" width="680" height="34" rx="6" fill="var(--code-bg)" stroke="var(--line)"/>
+        <rect x="120" y="248" width="680" height="34" rx="6" fill="var(--surface-2)" stroke="var(--line)"/>
         <text x="460" y="268" text-anchor="middle" font-size="11.5" fill="var(--muted)">64 waypoint slots in Phase B attend to each other non&#8209;causally, and cross&#8209;attend read&#8209;only into Phase A's cache</text>
       </svg>
     </div>
@@ -353,6 +499,21 @@
   </div>
 </section>
 
+<section id="scenarios">
+  <div class="wide">
+    <span class="eyebrow">Run it yourself</span>
+    <h2 class="h">10 scenarios, 10 real rollouts</h2>
+    <p class="lead">
+      Each card is a real <code>sample_trajectories_from_data_with_vlm_rollout()</code> call on a different
+      clip &mdash; the plot and reasoning are genuine model output. Camera frames are left out on purpose:
+      the PhysicalAI&#8209;AV dataset's license prohibits redistributing or hosting derived clips publicly,
+      so only the trajectory and text (which aren't dataset content) are shown here. Click a card to replay it.
+    </p>
+    <div class="scenario-grid" id="scenarioGrid"></div>
+    <p class="scenario-note">Full camera-included demo videos exist locally and in a private walkthrough — ask yax for access.</p>
+  </div>
+</section>
+
 <section id="numbers">
   <div class="wrap">
     <span class="eyebrow">Concrete numbers</span>
@@ -367,6 +528,7 @@
       <div class="row"><div class="k">Vocabulary</div><div class="v">155,697</div><div class="d">base 151,936 + trajectory tokens</div></div>
       <div class="row"><div class="k">Image resolution</div><div class="v">163,840&ndash;196,608 px</div><div class="d">dynamic, Qwen AnyRes&#8209;style</div></div>
       <div class="row"><div class="k">Precision / attention</div><div class="v">bf16 &middot; flash&#8209;attention&#8209;2</div><div class="d">&ge;24GB VRAM required</div></div>
+      <div class="row"><div class="k">Training data (paper)</div><div class="v">1,727 hrs &middot; 300k+ clips</div><div class="d">25 countries, per NVIDIA Research</div></div>
     </div>
   </div>
 </section>
@@ -377,7 +539,7 @@
     <h2 class="h">Cite the original paper, not this page</h2>
     <p class="lead">This is study material, not a publication. If it's useful, cite NVIDIA's paper:</p>
     <div class="cite-box">@article{alpamayo2025,
-  title   = {Alpamayo-R1: Bridging Reasoning and Action Prediction for Generalizable Autonomous Driving in the Long Tail},
+  title   = {Alpamayo 1: Bridging Reasoning and Action Prediction for Generalizable Autonomous Driving in the Long Tail},
   author  = {NVIDIA},
   journal = {arXiv preprint arXiv:2511.00088},
   year    = {2025}
@@ -389,9 +551,9 @@
   <div class="wrap">
     <p>
       Notes compiled by reading <code>src/alpamayo_r1/</code> and the downloaded checkpoint's
-      <code>config.json</code> directly &mdash; corrections welcome via the fork's issues.
-      The upstream repo (<code>NVlabs/alpamayo</code>) is marked no&#8209;longer&#8209;actively&#8209;developed;
-      see <code>alpamayo1.5</code> for current work.
+      <code>config.json</code> directly, plus NVIDIA's public research page &mdash; corrections welcome via
+      the fork's issues. The upstream repo (<code>NVlabs/alpamayo</code>) is marked
+      no&#8209;longer&#8209;actively&#8209;developed; see <code>alpamayo1.5</code> for current work.
     </p>
     <div class="links">
       <a href="https://github.com/jundduck/alpamayo">This fork</a>
@@ -401,89 +563,29 @@
   </div>
 </footer>
 
+<script src="scenarios.data.js"></script>
+<script src="scenarios.render.js"></script>
 <script>
 (function(){
-  var stages = [
-    {
-      name: "Inputs", title: "Posed multi‑camera inputs",
-      desc: "4 cameras × 4 history frames (16 images), plus 1.6s of ego pose history rotated into the ego‑local frame at t0.",
-      svg: '<svg viewBox="0 0 240 180"><g fill="none" stroke="var(--accent)" stroke-width="2.2"><rect x="30" y="24" width="68" height="44" rx="5"/><rect x="108" y="24" width="68" height="44" rx="5"/><rect x="30" y="78" width="68" height="44" rx="5"/><rect x="108" y="78" width="68" height="44" rx="5"/></g><circle cx="150" cy="148" r="16" fill="none" stroke="var(--faint)" stroke-width="2"/><line x1="150" y1="148" x2="150" y2="137" stroke="var(--faint)" stroke-width="2"/><line x1="150" y1="148" x2="158" y2="150" stroke="var(--faint)" stroke-width="2"/><text x="40" y="150" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono">1.6s</text></svg>'
-    },
-    {
-      name: "Prompt", title: "Interleaved chat template",
-      desc: "16 image tokens + 48 history‑placeholder tokens, then the assistant turn is pre‑seeded with ‹cot_start› so generation continues it.",
-      svg: '<svg viewBox="0 0 240 180"><g fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.8"><rect x="18" y="70" width="26" height="26" rx="4"/><rect x="50" y="70" width="26" height="26" rx="4"/><rect x="82" y="70" width="26" height="26" rx="4"/></g><text x="31" y="88" font-size="10" text-anchor="middle" fill="var(--accent-ink)">img</text><text x="63" y="88" font-size="10" text-anchor="middle" fill="var(--accent-ink)">img</text><text x="95" y="88" font-size="10" text-anchor="middle" fill="var(--accent-ink)">…</text><path d="M114 83 H140" stroke="var(--faint)" stroke-width="1.6" marker-end="url(#ah)"/><rect x="146" y="50" width="78" height="66" rx="10" fill="#fff" stroke="var(--line)" stroke-width="1.6"/><text x="185" y="78" font-size="10.5" text-anchor="middle" font-family="IBM Plex Mono" fill="var(--ink)">‹cot_start›</text><text x="185" y="96" font-size="9.5" text-anchor="middle" fill="var(--muted)">continue…</text><defs><marker id="ah" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--faint)"/></marker></defs></svg>'
-    },
-    {
-      name: "History", title: "History → 48 discrete tokens",
-      desc: "16 steps × 3 dims of ego‑local motion are delta‑encoded into 48 integer tokens, scattered into the placeholder slots.",
-      svg: '<svg viewBox="0 0 240 180"><path d="M20 130 Q60 60 100 100 T180 70" fill="none" stroke="var(--faint)" stroke-width="2"/><path d="M120 95 H150" stroke="var(--faint)" stroke-width="1.6" marker-end="url(#ah2)"/><defs><marker id="ah2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--faint)"/></marker></defs><g>' +
-        [0,1,2,3,4,5].map(function(i){return '<rect x="'+(158+i*13)+'" y="58" width="10" height="18" rx="2" fill="var(--accent-bg)" stroke="var(--accent)" stroke-width="1.3"/>';}).join('') +
-        '</g><text x="190" y="92" font-size="10" text-anchor="middle" fill="var(--muted)" font-family="IBM Plex Mono">×48</text></svg>'
-    },
-    {
-      name: "VLM", title: "Causal VLM writes the reasoning",
-      desc: "The 36‑layer Qwen3‑VL backbone encodes all frames and autoregressively generates Chain‑of‑Causation text; the trajectory‑token vocabulary is logit‑masked so it can't leak here.",
-      svg: '<svg viewBox="0 0 240 180">' +
-        [0,1,2,3,4,5,6,7].map(function(i){return '<rect x="60" y="'+(140-i*12)+'" width="100" height="9" rx="2" fill="'+(i===7?"var(--accent-bg)":"var(--code-bg)")+'" stroke="'+(i===7?"var(--accent)":"var(--line)")+'" stroke-width="1.3"/>';}).join('') +
-        '<path d="M160 52 Q190 40 196 20" fill="none" stroke="var(--accent)" stroke-width="1.8" marker-end="url(#ah3)"/><rect x="178" y="2" width="56" height="26" rx="8" fill="#fff" stroke="var(--accent)" stroke-width="1.6"/><text x="206" y="19" font-size="10" text-anchor="middle" font-family="IBM Plex Mono" fill="var(--accent-ink)">CoC</text><defs><marker id="ah3" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--accent)"/></marker></defs></svg>'
-    },
-    {
-      name: "Handoff", title: "KV‑cache handoff",
-      desc: "The cache spanning the whole prompt+reasoning prefix is kept as‑is. New M‑RoPE position ids and an attention mask are built for 64 fresh future slots — nothing is re‑encoded.",
-      svg: '<svg viewBox="0 0 240 180">' +
-        [0,1,2,3,4,5].map(function(i){return '<rect x="24" y="'+(130-i*14)+'" width="70" height="10" rx="2" fill="var(--code-bg)" stroke="var(--line)" stroke-width="1.3"/>';}).join('') +
-        '<path d="M100 90 Q130 90 150 90" fill="none" stroke="var(--amber)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#ah4)"/><ellipse cx="190" cy="90" rx="34" ry="22" fill="var(--amber-bg)" stroke="var(--amber)" stroke-width="1.8"/><text x="190" y="94" font-size="11" text-anchor="middle" font-family="IBM Plex Mono" fill="var(--amber)">KV</text><defs><marker id="ah4" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--amber)"/></marker></defs></svg>'
-    },
-    {
-      name: "Diffusion", title: "Non‑causal denoising",
-      desc: "A second, narrower 36‑layer transformer starts from Gaussian noise over 64 waypoints and runs 10 Euler flow‑matching steps, reading the Phase‑A cache layer‑for‑layer.",
-      svg: '<svg viewBox="0 0 240 180">' +
-        Array.from({length:22}).map(function(_,i){var x=24+Math.random()*70,y=40+Math.random()*100;return '<circle cx="'+x.toFixed(0)+'" cy="'+y.toFixed(0)+'" r="2.4" fill="var(--rose)" opacity="0.65"/>';}).join('') +
-        '<path d="M100 95 H140" stroke="var(--faint)" stroke-width="1.6" marker-end="url(#ah5)"/><path d="M150 140 Q170 70 220 55" fill="none" stroke="var(--rose)" stroke-width="2.4"/><defs><marker id="ah5" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--faint)"/></marker></defs></svg>'
-    },
-    {
-      name: "Decode", title: "Unicycle action → trajectory",
-      desc: "Each waypoint's (acceleration, curvature) pair is forward‑integrated through a unicycle kinematic model into (x, y, heading).",
-      svg: '<svg viewBox="0 0 240 180"><path d="M24 150 Q90 150 120 90 T216 30" fill="none" stroke="var(--green)" stroke-width="2.6"/>' +
-        [[24,150],[80,146],[130,96],[176,58],[216,30]].map(function(p){return '<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3.4" fill="var(--green)"/>';}).join('') +
-        '</svg>'
-    },
-    {
-      name: "Output", title: "Trajectory + reasoning, returned",
-      desc: "The text between ‹cot_start›/‹cot_end› is extracted as the Chain‑of‑Causation, returned alongside the (x,y,heading) trajectory — this is what demo_video.py renders.",
-      svg: '<svg viewBox="0 0 240 180"><rect x="18" y="20" width="204" height="140" rx="10" fill="#fff" stroke="var(--line)" stroke-width="1.6"/><rect x="30" y="32" width="80" height="54" rx="5" fill="var(--code-bg)" stroke="var(--line)"/><path d="M118 70 Q150 50 180 40" fill="none" stroke="var(--accent)" stroke-width="2.2"/><rect x="30" y="96" width="176" height="8" rx="3" fill="var(--code-bg)"/><rect x="30" y="110" width="140" height="8" rx="3" fill="var(--code-bg)"/><rect x="30" y="126" width="90" height="8" rx="3" fill="var(--accent-bg)"/></svg>'
-    }
-  ];
-
-  var idx = 0, playing = false, timer = null;
-  var canvas = document.getElementById('stageCanvas');
-  var nameEl = document.getElementById('stageName');
-  var idxEl = document.getElementById('stageIdx');
-  var titleEl = document.getElementById('stageTitle');
-  var descEl = document.getElementById('stageDesc');
-  var pillsEl = document.getElementById('stagePills');
+  var cards = Array.from(document.querySelectorAll('.stage-card'));
+  var pillsEl = document.getElementById('flowPills');
   var playBtn = document.getElementById('playBtn');
+  var idx = 0, playing = false, timer = null;
 
-  stages.forEach(function(s, i){
+  cards.forEach(function(card, i){
     var pill = document.createElement('button');
-    pill.className = 'stage-pill' + (i === 0 ? ' active' : '');
-    pill.innerHTML = '<span class="num">' + (i+1) + '</span><span class="lbl">' + s.name + '</span>';
-    pill.addEventListener('click', function(){ stop(); render(i); });
+    pill.className = 'flow-pill' + (i === 0 ? ' active' : '');
+    pill.textContent = i + 1;
+    pill.addEventListener('click', function(){ stop(); setActive(i); });
     pillsEl.appendChild(pill);
   });
+  var pills = Array.from(pillsEl.children);
 
-  function render(i){
-    idx = (i + stages.length) % stages.length;
-    var s = stages[idx];
-    canvas.innerHTML = s.svg;
-    nameEl.textContent = s.name;
-    idxEl.textContent = idx + 1;
-    titleEl.textContent = s.title;
-    descEl.textContent = s.desc;
-    Array.from(pillsEl.children).forEach(function(el, i2){
-      el.classList.toggle('active', i2 === idx);
-    });
+  function setActive(i){
+    idx = (i + cards.length) % cards.length;
+    cards.forEach(function(c, j){ c.classList.toggle('active', j === idx); });
+    pills.forEach(function(p, j){ p.classList.toggle('active', j === idx); });
+    cards[idx].scrollIntoView({behavior: 'smooth', inline: 'center', block: 'nearest'});
   }
 
   function stop(){
@@ -492,16 +594,16 @@
     if (timer) { clearInterval(timer); timer = null; }
   }
 
-  document.getElementById('prevBtn').addEventListener('click', function(){ stop(); render(idx - 1); });
-  document.getElementById('nextBtn').addEventListener('click', function(){ stop(); render(idx + 1); });
+  document.getElementById('prevBtn').addEventListener('click', function(){ stop(); setActive(idx - 1); });
+  document.getElementById('nextBtn').addEventListener('click', function(){ stop(); setActive(idx + 1); });
   playBtn.addEventListener('click', function(){
     if (playing) { stop(); return; }
     playing = true;
     playBtn.innerHTML = '&#10073;&#10073; Pause';
-    timer = setInterval(function(){ render(idx + 1); }, 2400);
+    timer = setInterval(function(){ setActive(idx + 1); }, 2200);
   });
 
-  render(0);
+  setActive(0);
 })();
 </script>
 
