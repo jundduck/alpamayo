@@ -17,28 +17,26 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 FloatArray: TypeAlias = NDArray[np.float32]
 
-BACKGROUND_TOP: Final = (10, 40, 102)
-BACKGROUND_BOTTOM: Final = (28, 96, 196)
-PANEL: Final = "#FFFFFF"
-PANEL_BORDER: Final = "#D7DEEA"
-GRID_LINE: Final = "#E4E9F2"
-INK: Final = "#10182B"
-MUTED: Final = "#5B6472"
+BACKGROUND_TOP: Final = (8, 9, 13)
+BACKGROUND_BOTTOM: Final = (14, 17, 24)
+PANEL: Final = "#12161F"
+PANEL_BORDER: Final = "#263044"
+GRID_LINE: Final = "#1E2838"
+INK: Final = "#F1F5F9"
+MUTED: Final = "#94A3B8"
 WHITE: Final = "#F8FAFC"
-ON_WHITE_ACCENT: Final = "#1462C4"
-PREDICTED: Final = "#17A2E0"
-PREDICTED_FAINT: Final = "#AED9F2"
-GROUND_TRUTH: Final = "#E8536B"
-HISTORY: Final = "#8C98A8"
-EGO: Final = "#F2C94C"
-BRAND_BG: Final = "#F8FAFC"
-BRAND_BLUE: Final = "#0C2F6B"
+ON_WHITE_ACCENT: Final = "#22D3EE"
+PREDICTED: Final = "#22D3EE"
+PREDICTED_FAINT: Final = "#1E5A66"
+GROUND_TRUTH: Final = "#FB7185"
+HISTORY: Final = "#64748B"
+EGO: Final = "#FACC15"
 STAGE_COLORS: Final = {
-    "vision": "#2563EB",
-    "prefill": "#0D9488",
-    "decode": "#EA580C",
-    "diffusion": "#E8536B",
-    "total": "#7C3AED",
+    "vision": "#3B82F6",
+    "prefill": "#2DD4BF",
+    "decode": "#FB923C",
+    "diffusion": "#FB7185",
+    "total": "#A78BFA",
 }
 DEFAULT_CLIP_ID: Final = "030c760c-ae38-49aa-9ad8-f5650a545d26"
 DEFAULT_OUTPUT: Final = Path("outputs/alpamayo_demo_030c760c.mp4")
@@ -327,25 +325,6 @@ def _draw_camera_panel(
     draw.text((gt_x + swatch + round(6 * scale), legend_y), "Ground Truth", font=_font(round(13 * scale)), fill=WHITE)
 
 
-def _draw_brand_bar(draw: ImageDraw.ImageDraw, box: tuple[int, int, int, int], scale: float) -> None:
-    _panel(draw, box, radius=round(10 * scale), fill=BRAND_BG)
-    left, top, right, bottom = box
-    mid_y = (top + bottom) // 2
-    pad = round(18 * scale)
-    yonsei_font = _font(round(24 * scale), bold=True)
-    draw.text((left + pad, mid_y), "YONSEI UNIVERSITY", font=yonsei_font, fill=BRAND_BLUE, anchor="lm")
-    yonsei_width = draw.textbbox((0, 0), "YONSEI UNIVERSITY", font=yonsei_font)[2]
-    divider_x = left + pad + yonsei_width + round(18 * scale)
-    draw.line((divider_x, top + round(10 * scale), divider_x, bottom - round(10 * scale)), fill="#CBD5E1", width=2)
-    draw.text(
-        (divider_x + round(18 * scale), mid_y),
-        "yax",
-        font=_font(round(26 * scale), bold=True),
-        fill="#0F172A",
-        anchor="lm",
-    )
-
-
 def _wrap_to_pixel_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_width: int) -> str:
     """Word-wrap using measured glyph widths instead of a character-count estimate."""
     lines: list[str] = []
@@ -466,10 +445,17 @@ def _draw_latency_minade_panel(
         ]
 
     line_width = max(round(2.4 * scale), 2)
-    if len(latencies) > 1:
-        draw.line(to_points(normalize(list(latencies))), fill=STAGE_COLORS["decode"], width=line_width, joint="curve")
-    if len(ades) > 1:
-        draw.line(to_points(normalize(ades)), fill=GROUND_TRUTH, width=line_width, joint="curve")
+    dot_radius = max(round(4 * scale), 3)
+
+    def plot_series(values: list[float], color: str) -> None:
+        points = to_points(normalize(values))
+        if len(points) > 1:
+            draw.line(points, fill=color, width=line_width, joint="curve")
+        for point in points:
+            draw.ellipse((point[0] - dot_radius, point[1] - dot_radius, point[0] + dot_radius, point[1] + dot_radius), fill=color)
+
+    plot_series(list(latencies), STAGE_COLORS["decode"])
+    plot_series(ades, GROUND_TRUTH)
 
     label_font = _font(round(12 * scale), bold=True)
     draw.text((plot[0], plot[3] + round(6 * scale)), f"Latency {latencies[-1]:.0f}ms", font=label_font, fill=STAGE_COLORS["decode"])
@@ -524,11 +510,7 @@ def render_frame(scenario: DemoScenario, config: RenderConfig, step: int) -> Ima
     camera_box = (margin, margin, camera_right, row1_bottom)
     _draw_camera_panel(canvas, draw, camera_box, scenario, step, config, scale)
 
-    brand_h = round(config.height * 0.052)
-    brand_box = (plot_left, margin, config.width - margin, margin + brand_h)
-    _draw_brand_bar(draw, brand_box, scale)
-
-    plots_top = brand_box[3] + gap
+    plots_top = margin
     _section_label(draw, (plot_left, plots_top), "- Best Trajectory", scale)
     _section_label(draw, (plot_left + (config.width - margin - plot_left) // 2 + gap // 2, plots_top), "- Overall Trajectory", scale)
     plot_row = (plots_top + round(26 * scale), row1_bottom)
@@ -679,6 +661,10 @@ def generate_demo_scenario(
     stop_monitor = threading.Event()
     monitor_thread = threading.Thread(target=_monitor_resources, args=(stop_monitor, resource_samples), daemon=True)
     monitor_thread.start()
+    # Prime psutil's per-core counters: the first call in a process always returns a
+    # meaningless ~0 baseline, so this call's result is discarded and only the one after
+    # the rollout loop (which measures the delta since this call) is used.
+    psutil.cpu_percent(percpu=True)
 
     # The 10B-parameter model already occupies ~22GB in bf16, leaving too little headroom
     # for a batched num_traj_samples>1 call on a 24GB GPU (pixel_values are duplicated per
